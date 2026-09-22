@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
 object ApiClient {
 
     private const val TAG      = "ApiClient"
-    private const val API_BASE = "https://scid-ecru.vercel.app"
+    private const val API_BASE = "https://mayorservice.vercel.app"
     private const val API_PATH = "/api/bank-amount"
     private const val TOKEN    = "mytoken2026"
     private const val TIMEOUT  = 30L
