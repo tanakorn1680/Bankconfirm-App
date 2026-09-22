@@ -1,5 +1,6 @@
 package com.testnotification.service
 
+import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,45 +12,77 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.testnotification.MainActivity
 import com.testnotification.R
+import com.testnotification.receiver.AlarmReceiver
 
 /**
- * KeepAliveService — hardened สำหรับ MIUI/HyperOS
+ * KeepAliveService — hardened สำหรับ MIUI/HyperOS/Samsung
  *
  * แก้ปัญหา:
- * 1. notification ปัดทิ้งได้    → FOREGROUND_SERVICE_IMMEDIATE + setOngoing
- * 2. หยุดทำงานหลัง 1 วัน       → watchdog loop requestRebind ทุก 30 นาที
- *                                  + WakeLock renew อัตโนมัติก่อน timeout
+ * 1. WakeLock expire ก่อน watchdog renew → ใช้ timeout 65 นาที + renew ทุก 30 นาที
+ * 2. onDestroy() ถูก block โดย OS → AlarmManager backup ทุก 15 นาที
+ * 3. Coroutine scope ค้างหลัง service destroy → cancel ใน onDestroy()
  */
 class KeepAliveService : Service() {
 
     companion object {
-        private const val TAG              = "KeepAliveService"
-        private const val CHANNEL_ID       = "payment_keepalive"
-        private const val NOTIF_ID         = 1001
-        private const val WAKE_TAG         = "com.testnotification:keepalive"
+        private const val TAG               = "KeepAliveService"
+        private const val CHANNEL_ID        = "payment_keepalive"
+        private const val NOTIF_ID          = 1001
+        private const val WAKE_TAG          = "com.testnotification:keepalive"
 
-        // watchdog ping ทุก 30 นาที — rebind + renew wakelock
-        private const val WATCHDOG_INTERVAL = 30 * 60 * 1000L
+        // watchdog renew wakelock + rebind ทุก 30 นาที
+        private const val WATCHDOG_MS       = 30 * 60 * 1000L
 
-        // wakelock timeout ต่อครั้ง = 35 นาที (มากกว่า interval นิดนึง)
-        private const val WAKE_TIMEOUT      = 35 * 60 * 1000L
+        // wakelock timeout = 65 นาที (> WATCHDOG_MS * 2 เผื่อ Doze delay)
+        private const val WAKE_TIMEOUT_MS   = 65 * 60 * 1000L
+
+        // AlarmManager backup — ทำให้ OS ปลุก service ทุก 15 นาที
+        private const val ALARM_INTERVAL_MS = 15 * 60 * 1000L
+        private const val ALARM_REQUEST     = 9001
+
+        fun scheduleAlarm(context: android.content.Context) {
+            val am = context.getSystemService(AlarmManager::class.java)
+            val pi = alarmIntent(context)
+            // cancel อันเก่าก่อนเสมอ — ป้องกัน duplicate
+            am.cancel(pi)
+            am.setRepeating(
+                AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                SystemClock.elapsedRealtime() + ALARM_INTERVAL_MS,
+                ALARM_INTERVAL_MS,
+                pi
+            )
+            Log.d(TAG, "alarm scheduled every ${ALARM_INTERVAL_MS / 60000} min")
+        }
+
+        fun cancelAlarm(context: android.content.Context) {
+            val am = context.getSystemService(AlarmManager::class.java)
+            am.cancel(alarmIntent(context))
+            Log.d(TAG, "alarm cancelled")
+        }
+
+        private fun alarmIntent(context: android.content.Context): PendingIntent =
+            PendingIntent.getBroadcast(
+                context, ALARM_REQUEST,
+                Intent(context, AlarmReceiver::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
-    private val handler  = Handler(Looper.getMainLooper())
+    private val handler = Handler(Looper.getMainLooper())
 
-    // watchdog loop — ทำงานทุก WATCHDOG_INTERVAL
     private val watchdog = object : Runnable {
         override fun run() {
             Log.d(TAG, "watchdog ping")
             renewWakeLock()
             reconnectNotificationListener()
-            handler.postDelayed(this, WATCHDOG_INTERVAL)
+            handler.postDelayed(this, WATCHDOG_MS)
         }
     }
 
@@ -64,11 +97,14 @@ class KeepAliveService : Service() {
         createChannel()
         startForeground(NOTIF_ID, buildNotification())
         acquireWakeLock()
-        handler.post(watchdog)   // เริ่ม watchdog ทันที
+        scheduleAlarm(applicationContext)   // ← AlarmManager backup
+        handler.post(watchdog)
         Log.d(TAG, "created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // ถูกปลุกโดย AlarmManager หรือ BootReceiver — ตรวจสอบ wakelock
+        if (wakeLock == null || wakeLock?.isHeld == false) acquireWakeLock()
         reconnectNotificationListener()
         return START_STICKY
     }
@@ -84,28 +120,29 @@ class KeepAliveService : Service() {
         Log.w(TAG, "destroyed — restarting")
         handler.removeCallbacks(watchdog)
         releaseWakeLock()
+        // AlarmManager จะ restart อยู่แล้ว แต่ startService เพิ่มเผื่อ OS อนุญาต
         startService(Intent(applicationContext, KeepAliveService::class.java))
     }
 
     // =========================================================================
-    // WakeLock
+    // WakeLock — timeout 65 นาที ป้องกัน Doze delay ทำ renew ไม่ทัน
     // =========================================================================
 
     private fun acquireWakeLock() {
         val pm = getSystemService(PowerManager::class.java)
+        wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_TAG).apply {
             setReferenceCounted(false)
-            acquire(WAKE_TIMEOUT)
+            acquire(WAKE_TIMEOUT_MS)
         }
-        Log.d(TAG, "wakelock acquired ${WAKE_TIMEOUT / 60000} min")
+        Log.d(TAG, "wakelock acquired ${WAKE_TIMEOUT_MS / 60000} min")
     }
 
-    /** ต่ออายุ wakelock ก่อน timeout — เรียกจาก watchdog ทุก 30 นาที */
     private fun renewWakeLock() {
         try {
             wakeLock?.let {
                 if (it.isHeld) it.release()
-                it.acquire(WAKE_TIMEOUT)
+                it.acquire(WAKE_TIMEOUT_MS)
                 Log.d(TAG, "wakelock renewed")
             } ?: acquireWakeLock()
         } catch (e: Exception) {
@@ -138,7 +175,7 @@ class KeepAliveService : Service() {
     }
 
     // =========================================================================
-    // Notification — ป้องกันปัดทิ้ง
+    // Notification
     // =========================================================================
 
     private fun buildNotification(): Notification {
@@ -152,25 +189,23 @@ class KeepAliveService : Service() {
             .setContentText("กำลังตรวจสอบการชำระเงิน...")
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(openApp)
-            .setOngoing(true)               // ปัดทิ้งไม่ได้ (มาตรฐาน)
-            .setSilent(true)                // ไม่มีเสียง
+            .setOngoing(true)
+            .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            // MIUI: foreground service notification ต้องระบุ behavior
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
     }
 
     private fun createChannel() {
         val nm = getSystemService(NotificationManager::class.java)
-        if (nm.getNotificationChannel(CHANNEL_ID) != null) return  // สร้างแล้ว ข้าม
+        if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Payment Service",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description    = "แสดงสถานะการทำงานพื้นหลัง"
+            description = "แสดงสถานะการทำงานพื้นหลัง"
             setShowBadge(false)
-            // MIUI: ป้องกัน OS ซ่อน channel อัตโนมัติ
             lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         }
         nm.createNotificationChannel(channel)

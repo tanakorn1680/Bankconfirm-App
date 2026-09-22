@@ -12,40 +12,35 @@ import com.testnotification.util.AmountParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
  * TestNotificationService
  *
- * Flow:
- *   onNotificationPosted()
- *     → บันทึก raw log → broadcast → MainActivity อัปเดท Debug tab (เดิม ไม่เปลี่ยน)
- *     → ถ้าเป็น KBank / TrueMoney:
- *         → parse ยอดเงิน (AmountParser)
- *         → ถ้าเจอยอด → POST /api/bank-amount (confirmPayment)
- *         → บันทึก match result กลับใน log row เดิม
+ * Fix: serviceScope ถูก cancel ใน onDestroy() ป้องกัน coroutine ค้างหลัง restart
  */
 class TestNotificationService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "TestNotifService"
 
-        // Package ที่จะ match กับ order (กรองเฉพาะธนาคาร)
         private val BANK_PACKAGES = mapOf(
             "com.kasikorn.retail.mbanking.wap" to "kbank",
             "th.co.truemoney.wallet"            to "truemoney",
             "com.truemoney.android.wallet"      to "truemoney",
         )
 
-        // SHOW_ALL = true  → แสดง log ทุกแอป (debug)
-        // SHOW_ALL = false → แสดงเฉพาะ BANK_PACKAGES
-        const val SHOW_ALL = true
+        // SHOW_ALL = false ในโปรดักชัน — แสดงเฉพาะ BANK_PACKAGES เพื่อประหยัด memory
+        const val SHOW_ALL = false
     }
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    // สร้าง scope ใหม่ทุกครั้ง onCreate() เพื่อให้ cancel ใน onDestroy() ได้สะอาด
+    private var serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
+        serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
         Log.d(TAG, "Service created — SHOW_ALL=$SHOW_ALL")
     }
 
@@ -57,10 +52,16 @@ class TestNotificationService : NotificationListenerService() {
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
         Log.w(TAG, "Listener disconnected — requesting rebind")
-        // reconnect อัตโนมัติ — สำคัญมากสำหรับ MIUI ที่ kill service บ่อย
         requestRebind(
             android.content.ComponentName(this, TestNotificationService::class.java)
         )
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // cancel coroutine ทั้งหมดที่ยังทำงานอยู่ ป้องกัน scope ค้าง
+        serviceScope.cancel()
+        Log.d(TAG, "Service destroyed — scope cancelled")
     }
 
     // =========================================================================
@@ -72,18 +73,15 @@ class TestNotificationService : NotificationListenerService() {
 
         val pkg = sbn.packageName ?: return
 
-        // ── กรองเฉพาะแอพที่ผู้ใช้เลือกใน Settings ────────────────────────
         val filterPackages = AppState.getFilterPackages(applicationContext)
         if (pkg !in filterPackages) return
 
-        // ── App name ──────────────────────────────────────────────────────
         val appName = try {
             packageManager.getApplicationLabel(
                 packageManager.getApplicationInfo(pkg, 0)
             ).toString()
         } catch (e: Exception) { "-" }
 
-        // ── Raw extras ────────────────────────────────────────────────────
         val extras = sbn.notification?.extras
 
         fun extra(key: String): String =
@@ -95,7 +93,6 @@ class TestNotificationService : NotificationListenerService() {
         val bigText = extra("android.bigText")
         val subText = extra("android.subText")
 
-        // ── บันทึก log (เดิม — ไม่เปลี่ยน) ───────────────────────────────
         val log = NotificationLog(
             timeMs      = sbn.postTime,
             packageName = pkg,
@@ -108,8 +105,6 @@ class TestNotificationService : NotificationListenerService() {
         AppState.addLog(log)
         broadcast()
 
-        // ── Match logic ────────────────────────────────────────────────────
-        // pkg ผ่าน filterPackages แล้วจาก check ด้านบน
         val bankLabel = BANK_PACKAGES[pkg] ?: "bank"
 
         val fullText = listOf(title, bigText.takeIf { it != "-" } ?: text)
@@ -129,7 +124,6 @@ class TestNotificationService : NotificationListenerService() {
         AppState.updateLastLog("⏳ ${AmountParser.format(amount)} [$bankLabel] กำลังจับคู่...")
         broadcast()
 
-        // สร้าง notification_id unique จาก pkg + postTime + amount
         val notifId = "${pkg}_${sbn.postTime}_${amount}"
 
         serviceScope.launch {
@@ -163,10 +157,6 @@ class TestNotificationService : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) { /* ไม่จำเป็น */ }
-
-    // =========================================================================
-    // Helper
-    // =========================================================================
 
     private fun broadcast() {
         LocalBroadcastManager.getInstance(applicationContext)
