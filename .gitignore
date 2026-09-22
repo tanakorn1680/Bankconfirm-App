@@ -1,0 +1,17 @@
+# Build outputs
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+*.keystore
+
+# APK/AAB outputs (GitHub Actions จะ build เอง)
+app/build/
+
+# Gradle wrapper jar ต้องไม่ใส่ใน .gitignore
+# !gradle/wrapper/gradle-wrapper.jar
