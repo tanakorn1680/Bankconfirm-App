@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">Payment</string>
-    <string name="service_label">Payment Notification Service</string>
-    <string name="btn_open_settings">Open Notification Access Settings</string>
-    <string name="keepalive_title">Payment</string>
-    <string name="keepalive_text">กำลังตรวจสอบการชำระเงิน...</string>
-</resources>
