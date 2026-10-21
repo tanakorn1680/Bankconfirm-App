@@ -9,7 +9,9 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.net.Uri
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
@@ -27,6 +29,7 @@ import com.testnotification.data.NotificationLog
 import com.testnotification.data.PendingOrder
 import com.testnotification.databinding.ActivityMainBinding
 import com.testnotification.network.ApiClient
+import com.testnotification.service.ListenerHealth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -77,7 +80,7 @@ class MainActivity : AppCompatActivity() {
 
         setupRecyclerView()
         setupButtons()
-        requestNotifPermissionIfNeeded()
+        if (savedInstanceState == null) requestNotifPermissionIfNeeded()
         startKeepAlive()
     }
 
@@ -87,6 +90,8 @@ class MainActivity : AppCompatActivity() {
             notifReceiver, IntentFilter(AppState.ACTION_NOTIFICATION_RECEIVED)
         )
         refreshAccessWarning()
+        // เปิดแอพ = โอกาสซ่อม listener ที่หลุด bind (ไม่ทำอะไรถ้า listener ปกติ)
+        ListenerHealth.ensureBound(applicationContext, "MainActivity.onResume")
         refreshLog()
         handler.post(pollOrders)
         handler.post(clockTick)  // เริ่ม real-time clock
@@ -179,13 +184,33 @@ class MainActivity : AppCompatActivity() {
 
     private val notifPermLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { /* ผลไม่สำคัญ — WarningCard จัดการให้ */ }
+    ) { requestBatteryExemptionIfNeeded() }   // ผลไม่สำคัญ — WarningCard จัดการให้
 
     private fun requestNotifPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-            == PackageManager.PERMISSION_GRANTED) return
-        notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED) {
+            notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        requestBatteryExemptionIfNeeded()
+    }
+
+    /**
+     * ขอยกเว้น Battery Optimization — ลดโอกาสที่ระบบ/ผู้ผลิต (Samsung/Xiaomi ฯลฯ) ฆ่าโปรเซส
+     * จนทำให้ NotificationListener หลุด และทำให้ KeepAlive start จากเบื้องหลังได้บน Android 12+
+     */
+    private fun requestBatteryExemptionIfNeeded() {
+        try {
+            val pm = getSystemService(PowerManager::class.java)
+            if (pm.isIgnoringBatteryOptimizations(packageName)) return
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    .setData(Uri.parse("package:$packageName"))
+            )
+        } catch (e: Exception) {
+            // เครื่องบางรุ่นไม่มีหน้านี้ — ข้ามได้
+        }
     }
 
     private fun startKeepAlive() {

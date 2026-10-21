@@ -9,6 +9,7 @@ import com.testnotification.data.AppState
 import com.testnotification.data.NotificationLog
 import com.testnotification.network.ApiClient
 import com.testnotification.util.AmountParser
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +20,8 @@ import kotlinx.coroutines.launch
  * TestNotificationService
  *
  * Fix: serviceScope ถูก cancel ใน onDestroy() ป้องกัน coroutine ค้างหลัง restart
+ * Fix: exception ใน callback/coroutine ต้องไม่ทำให้โปรเซส crash (crash ซ้ำ = ระบบเลิก bind listener)
+ * Fix: รายงานสถานะ connected ให้ ListenerHealth เพื่อซ่อมตัวเองเมื่อหลุด bind
  */
 class TestNotificationService : NotificationListenerService() {
 
@@ -35,30 +38,51 @@ class TestNotificationService : NotificationListenerService() {
         const val SHOW_ALL = false
     }
 
+    // กัน exception ที่หลุดจาก coroutine ไม่ให้ crash ทั้งโปรเซส
+    private val scopeErrorHandler = CoroutineExceptionHandler { _, e ->
+        Log.e(TAG, "coroutine error: ${e.message}", e)
+    }
+
+    private fun newScope() =
+        CoroutineScope(Dispatchers.IO + SupervisorJob() + scopeErrorHandler)
+
     // สร้าง scope ใหม่ทุกครั้ง onCreate() เพื่อให้ cancel ใน onDestroy() ได้สะอาด
-    private var serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var serviceScope = newScope()
 
     override fun onCreate() {
         super.onCreate()
-        serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        serviceScope.cancel()
+        serviceScope = newScope()
+        ListenerHealth.owner = this
         Log.d(TAG, "Service created — SHOW_ALL=$SHOW_ALL")
     }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        ListenerHealth.owner = this
+        ListenerHealth.connected = true
         Log.d(TAG, "Listener connected")
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        if (ListenerHealth.owner === this) ListenerHealth.connected = false
         Log.w(TAG, "Listener disconnected — requesting rebind")
-        requestRebind(
-            android.content.ComponentName(this, TestNotificationService::class.java)
-        )
+        try {
+            requestRebind(
+                android.content.ComponentName(this, TestNotificationService::class.java)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "requestRebind failed: ${e.message}")
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        if (ListenerHealth.owner === this) {
+            ListenerHealth.connected = false
+            ListenerHealth.owner = null
+        }
         // cancel coroutine ทั้งหมดที่ยังทำงานอยู่ ป้องกัน scope ค้าง
         serviceScope.cancel()
         Log.d(TAG, "Service destroyed — scope cancelled")
@@ -69,6 +93,15 @@ class TestNotificationService : NotificationListenerService() {
     // =========================================================================
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        try {
+            handleNotification(sbn)
+        } catch (e: Exception) {
+            // ห้ามให้ exception หลุดออกไป — crash ซ้ำๆ ทำให้ระบบเลิก bind listener
+            Log.e(TAG, "onNotificationPosted error: ${e.message}", e)
+        }
+    }
+
+    private fun handleNotification(sbn: StatusBarNotification?) {
         sbn ?: return
 
         val pkg = sbn.packageName ?: return

@@ -1,0 +1,91 @@
+=====================================================================
+HANDOFF NOTES — Bankconfirm-App (Android, Kotlin)
+อัปเดตล่าสุด: 22 ต.ค. 2026
+ไฟล์นี้ไว้ให้ AI/คนที่รับช่วงต่ออ่านแล้วเข้าใจสถานการณ์ได้ทันที
+=====================================================================
+
+1) แอพคืออะไร
+---------------------------------------------------------------------
+- แอพ Android (package com.testnotification) อ่าน notification ของแอพธนาคาร
+  (K PLUS: com.kasikorn.retail.mbanking.wap, TrueMoney) ด้วย NotificationListenerService
+  แล้ว parse ยอดเงิน -> ส่ง API (network/ApiClient.kt) เพื่อจับคู่กับ pending order
+- มี KeepAliveService (foreground + wakelock) + AlarmManager + BootReceiver ไว้ให้แอพอยู่เบื้องหลัง
+- Build ด้วย GitHub Actions (.github/workflows/build-apk.yml) -> debug APK
+- minSdk 26 / targetSdk 34 / Kotlin 1.9.23 / AGP 8.3.2
+
+2) ปัญหาที่ผู้ใช้เจอ (เป้าหมายงานนี้)
+---------------------------------------------------------------------
+- ช่วงแรกแอพอ่านแจ้งเตือนได้ปกติ แต่พอผ่านไปนานๆ เริ่มไม่อ่านแจ้งเตือน
+- ต้องไปที่ Settings > Notification access แล้วปิด/เปิดสิทธิ์ แอพถึงกลับมาทำงาน
+- เป้าหมาย: ให้แอพซ่อมตัวเองโดยไม่ต้องให้ผู้ใช้ปิด/เปิดสิทธิ์ด้วยมือ
+
+3) วิเคราะห์สาเหตุ (จากการอ่านโค้ด — ยังไม่ได้ยืนยันบนเครื่องจริง)
+---------------------------------------------------------------------
+A. listener หลุด bind แล้วระบบไม่ rebind ให้
+   - โปรเซสถูกฆ่า (OEM/Doze/memory) หรือ crash ซ้ำ ระบบอาจเลิก bind
+   - โค้ดเดิมมีแค่ requestRebind() ซึ่งมักไม่พอ เพราะระบบยังมองว่า listener "enabled" อยู่
+   - การปิด/เปิดสิทธิ์ใน Settings ได้ผลเพราะบังคับ bind ใหม่
+B. จุดที่ทำให้โปรเซส crash ตอนอยู่เบื้องหลัง (listener อยู่โปรเซสเดียวกัน จึงตายตาม)
+   - KeepAliveService.onDestroy()/onTaskRemoved() เรียก startService() ตรงๆ ไม่มี try/catch
+     (Android 8+ ห้ามจากเบื้องหลัง -> IllegalStateException)
+   - AlarmReceiver เรียก startForegroundService() ไม่มี try/catch
+     (Android 12+ ห้ามจาก alarm แบบ inexact -> ForegroundServiceStartNotAllowedException)
+   - onNotificationPosted() และ coroutine ใน serviceScope ไม่มีตัวจับ exception
+   - ถ้า crash 2 ครั้งในเวลาสั้น ระบบอาจ mark โปรเซสเป็น "bad" และไม่ restart service เบื้องหลัง
+C. AlarmManager.setRepeating() เป็น inexact ถูกเลื่อนยาวมากตอน Doze -> watchdog ไม่ทำงานช่วงเครื่องนิ่งนานๆ
+D. ไม่ได้ขอยกเว้น Battery Optimization -> ถูก OEM ฆ่าได้ง่าย และ start FGS จากเบื้องหลังบน Android 12+ ไม่ได้
+
+4) สิ่งที่แก้แล้ว (รอบนี้)
+---------------------------------------------------------------------
+[ใหม่]  service/ListenerHealth.kt
+   - เก็บสถานะ connected ของ listener (service รายงานผ่าน onListenerConnected/Disconnected)
+   - ensureBound(): ถ้าผู้ใช้ grant สิทธิ์แล้วแต่ listener ไม่ connected ->
+       requestRebind() -> รอ 5 วิ -> ถ้ายังไม่ connected ให้สลับ
+       PackageManager.setComponentEnabledSetting(DISABLED -> ENABLED, DONT_KILL_APP) + requestRebind()
+       (เทียบเท่าปิด/เปิดสิทธิ์ใน Settings) จำกัดไม่เกิน 1 ครั้ง/นาที
+   - จงใจ "ไม่สลับ" ตอน listener ปกติ เพื่อไม่ให้แจ้งเตือนธนาคารหายระหว่างช่วงสลับ
+[แก้]   service/NotificationListenerService.kt (class TestNotificationService)
+   - รายงาน connected ให้ ListenerHealth, ครอบ try/catch ใน onNotificationPosted
+   - เพิ่ม CoroutineExceptionHandler ให้ serviceScope, ครอบ requestRebind ด้วย try/catch
+[แก้]   service/KeepAliveService.kt
+   - startService ใน onDestroy/onTaskRemoved ผ่าน safeRestartSelf() (try/catch)
+   - เปลี่ยน setRepeating -> setAndAllowWhileIdle แบบ one-shot (ตั้งรอบถัดไปใน AlarmReceiver/onStartCommand)
+   - watchdog/onStartCommand เรียก ListenerHealth.ensureBound() แทน requestRebind ตรงๆ
+[แก้]   receiver/AlarmReceiver.kt — ตั้ง alarm รอบถัดไป, try/catch ตอน start service, เรียก ensureBound()
+[แก้]   receiver/BootReceiver.kt — try/catch, เรียก ensureBound()
+[แก้]   MainActivity.kt — onResume เรียก ensureBound(); ขอยกเว้น Battery Optimization (ถามตอนเปิดแอพ
+        หลังขอสิทธิ์ notification) ; กันถามซ้ำตอน rotate (savedInstanceState == null)
+[แก้]   AndroidManifest.xml — เพิ่ม REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
+
+5) สถานะ
+---------------------------------------------------------------------
+- โค้ดแก้เสร็จตามข้อ 4 แต่ "ยังไม่ได้ compile / ยังไม่ได้ทดสอบบนเครื่อง" (ผู้ใช้สั่งไม่ต้องทดสอบ)
+- ขั้นต่อไปที่ต้องทำ: push -> ให้ GitHub Actions build -> ถ้า build error ให้แก้ตาม log
+  (จุดเสี่ยง compile: ListenerHealth.kt, KeepAliveService.kt, MainActivity.kt)
+- ผู้ใช้ต้องกดอนุญาต "ไม่จำกัดแบตเตอรี่" ในกล่องที่เด้งตอนเปิดแอพ
+  และบนมือถือบางยี่ห้อ (Xiaomi/Samsung/Oppo/Vivo/Huawei) ควรเปิด Autostart / ปิดการประหยัดแบตของแอพนี้ด้วยมือ
+
+6) ถ้าอาการยังไม่หาย — ขั้นต่อไปที่แนะนำ
+---------------------------------------------------------------------
+- ดู logcat tag: ListenerHealth, TestNotifService, KeepAliveService, AlarmReceiver
+  (ถ้ามี "toggled component to force rebind" แสดงว่ากลไกซ่อมทำงาน)
+- กรณี listener "คิดว่า connected" แต่ระบบไม่ส่ง notification มาจริง (zombie binding)
+  ระบบนี้ตรวจไม่เจอ ทางเสริม: ให้ KeepAliveService อัปเดต notification ของตัวเองเป็นระยะ
+  แล้วดูว่า onNotificationPosted ได้รับ package ตัวเองกลับมาภายใน ~10 วิหรือไม่
+  ถ้าไม่ -> เรียก ListenerHealth.forceRebind()
+- ผลข้างเคียงที่ยอมรับ: ระหว่างสลับ component มีช่วงสั้นๆ ที่แจ้งเตือนอาจไม่ถูกส่งมา
+  (จึงสลับเฉพาะตอนตรวจพบว่าไม่ connected เท่านั้น)
+
+7) ข้อสังเกตอื่น (ยังไม่ได้แก้ — นอกขอบเขตงานนี้)
+---------------------------------------------------------------------
+- ApiClient.confirmPayment รันใน serviceScope ซึ่งถูก cancel ตอน service destroy
+  -> ถ้า service ถูกทำลายกลางคัน request ที่ค้างอยู่จะหาย (ควรใช้ scope ระดับแอพ/WorkManager retry)
+- README.md ล้าสมัย (ยังเขียนว่าเป็นแอพทดสอบ SHOW_ALL=true)
+- มีไฟล์ network/ApiClient.kt.bak ค้างใน repo
+
+8) แนวทางการทำงานที่ผู้ใช้ต้องการ
+---------------------------------------------------------------------
+- ตอบเป็นภาษาไทย
+- แก้เฉพาะที่จำเป็น ไม่ทดสอบ/ไม่ทำงานเกินขอบเขต
+- ส่งมอบเป็น zip ที่มี "เฉพาะไฟล์ที่แก้" จัดโครงสร้างโฟลเดอร์ให้แตกเข้า root ของ repo แล้วทับของเดิมได้เลย
+- บันทึกความคืบหน้าไว้ในไฟล์นี้ (HANDOFF_NOTES.txt ที่ root) ทุกครั้งที่แก้

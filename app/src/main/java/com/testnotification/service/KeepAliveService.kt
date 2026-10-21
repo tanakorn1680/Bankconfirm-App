@@ -6,14 +6,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.ComponentName
 import android.content.Intent
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.service.notification.NotificationListenerService
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.testnotification.MainActivity
@@ -27,6 +25,10 @@ import com.testnotification.receiver.AlarmReceiver
  * 1. WakeLock expire ก่อน watchdog renew → ใช้ timeout 65 นาที + renew ทุก 30 นาที
  * 2. onDestroy() ถูก block โดย OS → AlarmManager backup ทุก 15 นาที
  * 3. Coroutine scope ค้างหลัง service destroy → cancel ใน onDestroy()
+ * 4. startService() จากเบื้องหลัง (onDestroy/onTaskRemoved) throw บน Android 8+/12+
+ *    แล้วทำให้โปรเซส crash (ลาก NotificationListener ตายไปด้วย) → ครอบ try/catch
+ * 5. NotificationListener หลุด bind แล้วไม่กลับมา → ListenerHealth.ensureBound()
+ *    (สลับ enable/disable component) ทุกครั้งที่ watchdog/alarm/start ทำงาน
  */
 class KeepAliveService : Service() {
 
@@ -46,24 +48,36 @@ class KeepAliveService : Service() {
         private const val ALARM_INTERVAL_MS = 15 * 60 * 1000L
         private const val ALARM_REQUEST     = 9001
 
+        /**
+         * ตั้ง alarm ครั้งเดียว — AlarmReceiver จะเรียกซ้ำเพื่อตั้งรอบถัดไป
+         * ใช้ setAndAllowWhileIdle เพราะ setRepeating (inexact) ถูกเลื่อนยาวมากตอนเครื่อง Doze
+         * ทำให้ watchdog ไม่ทำงานตอนกลางคืน/เครื่องนิ่งนานๆ
+         */
         fun scheduleAlarm(context: android.content.Context) {
-            val am = context.getSystemService(AlarmManager::class.java)
-            val pi = alarmIntent(context)
-            // cancel อันเก่าก่อนเสมอ — ป้องกัน duplicate
-            am.cancel(pi)
-            am.setRepeating(
-                AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                SystemClock.elapsedRealtime() + ALARM_INTERVAL_MS,
-                ALARM_INTERVAL_MS,
-                pi
-            )
-            Log.d(TAG, "alarm scheduled every ${ALARM_INTERVAL_MS / 60000} min")
+            try {
+                val am = context.getSystemService(AlarmManager::class.java)
+                val pi = alarmIntent(context)
+                // cancel อันเก่าก่อนเสมอ — ป้องกัน duplicate
+                am.cancel(pi)
+                am.setAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + ALARM_INTERVAL_MS,
+                    pi
+                )
+                Log.d(TAG, "alarm scheduled in ${ALARM_INTERVAL_MS / 60000} min")
+            } catch (e: Exception) {
+                Log.w(TAG, "scheduleAlarm failed: ${e.message}")
+            }
         }
 
         fun cancelAlarm(context: android.content.Context) {
-            val am = context.getSystemService(AlarmManager::class.java)
-            am.cancel(alarmIntent(context))
-            Log.d(TAG, "alarm cancelled")
+            try {
+                val am = context.getSystemService(AlarmManager::class.java)
+                am.cancel(alarmIntent(context))
+                Log.d(TAG, "alarm cancelled")
+            } catch (e: Exception) {
+                Log.w(TAG, "cancelAlarm failed: ${e.message}")
+            }
         }
 
         private fun alarmIntent(context: android.content.Context): PendingIntent =
@@ -81,7 +95,7 @@ class KeepAliveService : Service() {
         override fun run() {
             Log.d(TAG, "watchdog ping")
             renewWakeLock()
-            reconnectNotificationListener()
+            reconnectNotificationListener("watchdog")
             handler.postDelayed(this, WATCHDOG_MS)
         }
     }
@@ -105,14 +119,15 @@ class KeepAliveService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // ถูกปลุกโดย AlarmManager หรือ BootReceiver — ตรวจสอบ wakelock
         if (wakeLock == null || wakeLock?.isHeld == false) acquireWakeLock()
-        reconnectNotificationListener()
+        scheduleAlarm(applicationContext)   // alarm เป็นแบบ one-shot — ตั้งรอบถัดไปเสมอ
+        reconnectNotificationListener("onStartCommand")
         return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         Log.w(TAG, "task removed — restarting")
-        startService(Intent(applicationContext, KeepAliveService::class.java))
+        safeRestartSelf()
     }
 
     override fun onDestroy() {
@@ -121,7 +136,19 @@ class KeepAliveService : Service() {
         handler.removeCallbacks(watchdog)
         releaseWakeLock()
         // AlarmManager จะ restart อยู่แล้ว แต่ startService เพิ่มเผื่อ OS อนุญาต
-        startService(Intent(applicationContext, KeepAliveService::class.java))
+        safeRestartSelf()
+    }
+
+    /**
+     * startService จากเบื้องหลังอาจ throw (IllegalStateException / ForegroundServiceStartNotAllowed)
+     * ถ้าไม่จับ โปรเซสจะ crash และลาก NotificationListener ตายไปด้วย
+     */
+    private fun safeRestartSelf() {
+        try {
+            startService(Intent(applicationContext, KeepAliveService::class.java))
+        } catch (e: Exception) {
+            Log.w(TAG, "restart self not allowed: ${e.message} — รอ AlarmManager ปลุกแทน")
+        }
     }
 
     // =========================================================================
@@ -164,14 +191,9 @@ class KeepAliveService : Service() {
     // Reconnect NotificationListener
     // =========================================================================
 
-    private fun reconnectNotificationListener() {
-        try {
-            val component = ComponentName(this, TestNotificationService::class.java)
-            NotificationListenerService.requestRebind(component)
-            Log.d(TAG, "requestRebind sent")
-        } catch (e: Exception) {
-            Log.w(TAG, "requestRebind failed: ${e.message}")
-        }
+    private fun reconnectNotificationListener(reason: String) {
+        // ถ้า listener ปกติ (connected) จะไม่ทำอะไร — ถ้าหลุดจะ requestRebind แล้วสลับ component
+        ListenerHealth.ensureBound(applicationContext, "KeepAlive:$reason")
     }
 
     // =========================================================================
