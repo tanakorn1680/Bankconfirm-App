@@ -25,7 +25,7 @@
             android:id="@+id/tvAppName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="14sp"
+            android:textSize="13.5sp"
             android:textStyle="bold"
             android:textColor="@color/text_primary" />
 
@@ -44,6 +44,7 @@
         android:id="@+id/cbSelected"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:buttonTint="@color/navy"
         android:clickable="false"
         android:focusable="false" />
 

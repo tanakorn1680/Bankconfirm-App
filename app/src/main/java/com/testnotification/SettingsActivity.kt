@@ -12,6 +12,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -53,7 +54,11 @@ class SettingsActivity : AppCompatActivity() {
         binding.rvApps.apply {
             layoutManager = LinearLayoutManager(this@SettingsActivity)
             adapter = appAdapter
-            addItemDecoration(DividerItemDecoration(context, DividerItemDecoration.VERTICAL))
+            addItemDecoration(
+                DividerItemDecoration(context, DividerItemDecoration.VERTICAL).apply {
+                    ContextCompat.getDrawable(context, R.drawable.divider_line)?.let { setDrawable(it) }
+                }
+            )
         }
     }
 

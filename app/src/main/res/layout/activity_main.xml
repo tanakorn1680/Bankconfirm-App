@@ -1,223 +1,538 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- หน้าหลัก: จัดวางตามหน้าแดชบอร์ดแอดมินของเว็บ (หัวหน้า + การ์ดสถิติ + การ์ดรายการ) -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/background">
 
-    <!-- Header -->
+    <!-- หัวหน้า: ชื่อหน้า (เส้นทองซ้าย) + คำอธิบาย + ปุ่มตั้งค่า -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="10dp">
+        android:paddingHorizontal="14dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="12dp">
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/app_name"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary" />
+            android:orientation="vertical">
 
-        <!-- Settings icon (gear) -->
-        <TextView
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <View
+                    android:layout_width="5dp"
+                    android:layout_height="22dp"
+                    android:layout_marginEnd="10dp"
+                    android:background="@drawable/bg_gold_bar" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_name"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:shadowColor="@color/shadow_text"
+                    android:shadowDx="0"
+                    android:shadowDy="1"
+                    android:shadowRadius="4" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="15dp"
+                android:layout_marginTop="2dp"
+                android:text="ภาพรวมออเดอร์รอจับคู่และแจ้งเตือนธนาคาร"
+                android:textSize="12.5sp"
+                android:textColor="#E6FFFFFF"
+                android:shadowColor="@color/shadow_text"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="4" />
+        </LinearLayout>
+
+        <ImageView
             android:id="@+id/btnSettings"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:text="⚙"
-            android:textSize="20sp"
-            android:gravity="center"
-            android:textColor="@color/text_secondary" />
-
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="10dp"
+            android:background="@drawable/bg_glass"
+            android:src="@drawable/ic_settings"
+            android:tint="@color/white"
+            android:contentDescription="ตั้งค่า"
+            android:clickable="true"
+            android:focusable="true" />
     </LinearLayout>
 
-    <!-- Warning card: แสดงเฉพาะตอน Notification Access OFF -->
-    <androidx.cardview.widget.CardView
+    <!-- เตือน: แสดงเฉพาะตอน Notification Access ปิดอยู่ -->
+    <LinearLayout
         android:id="@+id/cardAccessWarning"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="10dp"
-        android:visibility="gone"
-        app:cardCornerRadius="10dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="#FEF2F2">
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginBottom="12dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="@drawable/bg_card_warn"
+        android:elevation="2dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/ic_alert"
+            android:tint="@color/status_off"
+            android:importantForAccessibility="no" />
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="12dp">
+            android:layout_weight="1"
+            android:orientation="vertical">
 
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="⚠️ ยังไม่ได้อนุญาต Notification Access"
-                android:textSize="13sp"
-                android:textColor="#DC2626" />
-
-            <Button
-                android:id="@+id/btnOpenSettings"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
-                android:text="เปิด"
-                android:textSize="12sp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
+                android:layout_height="wrap_content"
+                android:text="ยังไม่ได้อนุญาต Notification Access"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/status_off" />
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text="แอพจะอ่านแจ้งเตือนธนาคารไม่ได้จนกว่าจะเปิดสิทธิ์"
+                android:textSize="11.5sp"
+                android:textColor="@color/text_secondary" />
         </LinearLayout>
-    </androidx.cardview.widget.CardView>
 
-    <!-- Main scroll area -->
+        <Button
+            android:id="@+id/btnOpenSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="16dp"
+            android:text="เปิดสิทธิ์"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            style="@style/Widget.Material3.Button" />
+    </LinearLayout>
+
+    <!-- พื้นที่เลื่อน -->
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true">
+        android:fillViewport="true"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingBottom="28dp">
 
-            <!-- ── ออเดอร์รอจับคู่ ─────────────────────────────────────── -->
+            <!-- การ์ดสถิติ 2 ช่อง (เหมือน .stat-grid) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="16dp"
-                android:paddingBottom="6dp">
+                android:layout_marginBottom="14dp">
 
-                <TextView
+                <!-- ออเดอร์รอจับคู่ -->
+                <LinearLayout
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="match_parent"
                     android:layout_weight="1"
-                    android:text="ออเดอร์รอจับคู่"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
+                    android:layout_marginEnd="5dp"
+                    android:orientation="vertical"
+                    android:padding="14dp"
+                    android:background="@drawable/bg_card"
+                    android:elevation="3dp">
 
-                <TextView
-                    android:id="@+id/tvOrderCount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_secondary" />
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="top">
 
-                <TextView
-                    android:id="@+id/tvLastRefresh"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="11sp"
-                    android:textColor="@color/text_secondary"
-                    android:layout_marginStart="8dp" />
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:paddingTop="2dp"
+                            android:text="ออเดอร์รอจับคู่"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_secondary" />
 
+                        <FrameLayout
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_gold">
+
+                            <ImageView
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_clock"
+                                android:tint="@color/gold_deep"
+                                android:importantForAccessibility="no" />
+                        </FrameLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal"
+                        android:gravity="bottom">
+
+                        <TextView
+                            android:id="@+id/tvStatOrders"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="-"
+                            android:textSize="26sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:layout_marginBottom="4dp"
+                            android:text="ออเดอร์"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvStatOrdersPill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="2dp"
+                        android:background="@drawable/bg_pill_neutral"
+                        android:text="กำลังโหลด"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="ยืนยันอัตโนมัติเมื่อยอดโอนตรงกัน"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
+
+                <!-- แจ้งเตือนที่อ่านได้ + สถานะการรับแจ้งเตือน -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="5dp"
+                    android:orientation="vertical"
+                    android:padding="14dp"
+                    android:background="@drawable/bg_card"
+                    android:elevation="3dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="top">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:paddingTop="2dp"
+                            android:text="แจ้งเตือนที่อ่านได้"
+                            android:textSize="12sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_secondary" />
+
+                        <FrameLayout
+                            android:layout_width="36dp"
+                            android:layout_height="36dp"
+                            android:background="@drawable/bg_icon_teal">
+
+                            <ImageView
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_bell"
+                                android:tint="@color/teal"
+                                android:importantForAccessibility="no" />
+                        </FrameLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="horizontal"
+                        android:gravity="bottom">
+
+                        <TextView
+                            android:id="@+id/tvStatLogs"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="0"
+                            android:textSize="26sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/navy" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:layout_marginBottom="4dp"
+                            android:text="รายการ"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvStatListenerPill"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:paddingHorizontal="10dp"
+                        android:paddingVertical="2dp"
+                        android:background="@drawable/bg_pill_neutral"
+                        android:text="กำลังตรวจสอบ"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="สถานะการรับแจ้งเตือนของแอพ"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
             </LinearLayout>
 
-            <androidx.cardview.widget.CardView
+            <!-- การ์ด: ออเดอร์รอจับคู่ (เหมือนการ์ด "รายการสั่งซื้อล่าสุด") -->
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
+                android:orientation="vertical"
                 android:layout_marginBottom="14dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface">
+                android:background="@drawable/bg_card"
+                android:elevation="3dp"
+                android:clipToOutline="true">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingTop="16dp"
+                    android:paddingBottom="12dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="ออเดอร์รอจับคู่"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:id="@+id/tvOrderCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="2dp"
+                            android:background="@drawable/bg_pill_neutral"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_secondary"
+                            android:visibility="gone" />
+                    </LinearLayout>
 
                     <TextView
-                        android:id="@+id/tvOrdersEmpty"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:paddingVertical="24dp"
-                        android:text="ไม่มีออเดอร์รอจับคู่ ✓"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        android:visibility="visible" />
+                        android:layout_marginTop="1dp"
+                        android:text="ระบบยืนยันให้อัตโนมัติเมื่อยอดโอนตรงกับแจ้งเตือนธนาคาร"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary" />
 
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvOrders"
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:id="@+id/tvLastRefresh"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
-                        android:visibility="gone" />
-
+                        android:layout_marginTop="4dp"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_secondary" />
                 </LinearLayout>
-            </androidx.cardview.widget.CardView>
 
-            <!-- ── Notification Log ──────────────────────────────────────── -->
+                <!-- แถบหัวคอลัมน์ -->
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="9dp"
+                    android:background="@color/strip_bg">
+
+                    <TextView
+                        android:layout_width="76dp"
+                        android:layout_height="wrap_content"
+                        android:text="รหัส"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="10dp"
+                        android:text="ผู้ซื้อ · สินค้า"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="ยอด · สถานะ"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_secondary" />
+                </LinearLayout>
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+
+                <TextView
+                    android:id="@+id/tvOrdersEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="18dp"
+                    android:text="ไม่มีออเดอร์รอจับคู่"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:visibility="visible" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvOrders"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- การ์ด: แจ้งเตือนล่าสุด -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="16dp"
-                android:paddingBottom="6dp">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Notification Log"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
-
-                <TextView
-                    android:id="@+id/tvLogCount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="12sp"
-                    android:textColor="@color/text_secondary" />
-
-            </LinearLayout>
-
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginHorizontal="16dp"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface">
+                android:orientation="vertical"
+                android:background="@drawable/bg_card"
+                android:elevation="3dp"
+                android:clipToOutline="true">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="vertical"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingTop="16dp"
+                    android:paddingBottom="12dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="แจ้งเตือนล่าสุด"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:id="@+id/tvLogCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="10dp"
+                            android:paddingVertical="2dp"
+                            android:background="@drawable/bg_pill_neutral"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_secondary"
+                            android:visibility="gone" />
+                    </LinearLayout>
 
                     <TextView
-                        android:id="@+id/tvLogEmpty"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:paddingVertical="24dp"
-                        android:text="รอรับ Notification..."
-                        android:textColor="@color/text_secondary"
-                        android:textSize="13sp"
-                        android:visibility="visible" />
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/rvLog"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:nestedScrollingEnabled="false"
-                        android:visibility="gone" />
-
+                        android:layout_marginTop="1dp"
+                        android:text="แจ้งเตือนจากแอพที่เลือกไว้ในหน้าตั้งค่า และผลการจับคู่"
+                        android:textSize="12sp"
+                        android:textColor="@color/text_secondary" />
                 </LinearLayout>
-            </androidx.cardview.widget.CardView>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
+
+                <TextView
+                    android:id="@+id/tvLogEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:padding="18dp"
+                    android:text="รอรับแจ้งเตือน..."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
+                    android:visibility="visible" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvLog"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:visibility="gone" />
+            </LinearLayout>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>

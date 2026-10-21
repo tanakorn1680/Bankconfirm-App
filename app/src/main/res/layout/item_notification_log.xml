@@ -3,11 +3,10 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:paddingHorizontal="14dp"
-    android:paddingTop="10dp"
-    android:paddingBottom="10dp">
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="11dp">
 
-    <!-- Row 1: ชื่อแอป + เวลา -->
+    <!-- แถว 1: ชื่อแอพ + เวลา -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -20,9 +19,9 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textSize="12sp"
+            android:textSize="12.5sp"
             android:textStyle="bold"
-            android:textColor="@color/colorPrimary" />
+            android:textColor="@color/navy" />
 
         <TextView
             android:id="@+id/tvTime"
@@ -31,15 +30,15 @@
             android:textSize="11sp"
             android:textColor="@color/text_secondary"
             android:fontFamily="monospace" />
-
     </LinearLayout>
 
-    <!-- Row 2: ข้อความหลัก (title — text หรือ bigText) -->
+    <!-- แถว 2: หัวข้อ + ข้อความ -->
     <TextView
         android:id="@+id/tvTitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textSize="13sp"
+        android:textStyle="bold"
         android:textColor="@color/text_primary"
         android:layout_marginBottom="2dp" />
 
@@ -50,25 +49,25 @@
         android:textSize="12sp"
         android:textColor="@color/text_secondary" />
 
-    <!-- BigText / SubText — ซ่อนไว้ (ยังคง id ไว้ให้ adapter ทำงานได้ปกติ) -->
+    <!-- BigText / SubText / Package — ซ่อนไว้ (ยังคง id ไว้ให้ adapter ทำงานได้ปกติ) -->
     <TextView android:id="@+id/tvBig"    android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
     <TextView android:id="@+id/tvSub"    android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
     <View     android:id="@+id/rowBig"   android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
     <View     android:id="@+id/rowSub"   android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
-    <!-- Package — ซ่อนไว้ (ยังคง id ไว้ให้ adapter ทำงานได้ปกติ) -->
     <TextView android:id="@+id/tvPackage" android:layout_width="0dp" android:layout_height="0dp" android:visibility="gone" />
 
-    <!-- Match Result (แสดงเฉพาะ notification ธนาคาร) -->
+    <!-- ผลการจับคู่ (พิลล์สีตามสถานะ — adapter เป็นผู้กำหนดสี) -->
     <TextView
         android:id="@+id/tvMatchResult"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:paddingHorizontal="10dp"
-        android:paddingVertical="5dp"
-        android:textSize="13sp"
+        android:layout_marginTop="7dp"
+        android:paddingHorizontal="11dp"
+        android:paddingVertical="4dp"
+        android:background="@drawable/bg_result_neutral"
+        android:textSize="12sp"
         android:textStyle="bold"
-        android:background="#FFF3E0"
+        android:textColor="@color/text_secondary"
         android:visibility="gone" />
 
 </LinearLayout>

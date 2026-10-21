@@ -1,128 +1,185 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- หน้าตั้งค่า: หัวหน้า/การ์ด/เส้นคั่นสไตล์เดียวกับหน้าแดชบอร์ดแอดมิน -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/background">
 
-    <!-- Header -->
+    <!-- หัวหน้า -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="14dp"
-        android:paddingBottom="10dp">
+        android:paddingHorizontal="14dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="12dp">
 
-        <TextView
+        <ImageView
             android:id="@+id/btnBack"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:text="←"
-            android:textSize="20sp"
-            android:gravity="center"
-            android:textColor="@color/text_secondary"
-            android:layout_marginEnd="8dp" />
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="12dp"
+            android:padding="10dp"
+            android:background="@drawable/bg_glass"
+            android:src="@drawable/ic_back"
+            android:tint="@color/white"
+            android:contentDescription="ย้อนกลับ"
+            android:clickable="true"
+            android:focusable="true" />
 
-        <TextView
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="ตั้งค่า"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:layout_width="5dp"
+                android:layout_height="22dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_gold_bar" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ตั้งค่า"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/white"
+                android:shadowColor="@color/shadow_text"
+                android:shadowDx="0"
+                android:shadowDy="1"
+                android:shadowRadius="4" />
+        </LinearLayout>
 
         <Button
             android:id="@+id/btnSave"
             android:layout_width="wrap_content"
-            android:layout_height="36dp"
+            android:layout_height="40dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="20dp"
             android:text="บันทึก"
             android:textSize="13sp"
+            android:textStyle="bold"
             style="@style/Widget.Material3.Button" />
-
     </LinearLayout>
 
-    <!-- Notification Access warning -->
-    <androidx.cardview.widget.CardView
+    <!-- เตือน: Notification Access ปิดอยู่ -->
+    <LinearLayout
         android:id="@+id/cardAccessWarning"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="10dp"
-        android:visibility="gone"
-        app:cardCornerRadius="10dp"
-        app:cardElevation="0dp"
-        app:cardBackgroundColor="#FEF2F2">
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginBottom="12dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="@drawable/bg_card_warn"
+        android:elevation="2dp"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/ic_alert"
+            android:tint="@color/status_off"
+            android:importantForAccessibility="no" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ยังไม่ได้อนุญาต Notification Access"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="@color/status_off" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text="แอพจะอ่านแจ้งเตือนธนาคารไม่ได้จนกว่าจะเปิดสิทธิ์"
+                android:textSize="11.5sp"
+                android:textColor="@color/text_secondary" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btnOpenSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="8dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:paddingHorizontal="16dp"
+            android:text="เปิดสิทธิ์"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            style="@style/Widget.Material3.Button" />
+    </LinearLayout>
+
+    <!-- การ์ด: เลือกแอพที่ใช้จับคู่ออเดอร์ -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginHorizontal="14dp"
+        android:layout_marginBottom="16dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_card"
+        android:elevation="3dp"
+        android:clipToOutline="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:padding="12dp">
+            android:orientation="vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="16dp"
+            android:paddingBottom="12dp">
 
             <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="⚠️ ยังไม่ได้อนุญาต Notification Access"
-                android:textSize="13sp"
-                android:textColor="#DC2626" />
-
-            <Button
-                android:id="@+id/btnOpenSettings"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
-                android:text="เปิด"
+                android:layout_height="wrap_content"
+                android:text="แอพที่ใช้จับคู่ออเดอร์"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:text="เลือกแอพที่ต้องการ รับแจ้งเตือนทุกแอพเหมือนเดิม แต่จับคู่เฉพาะที่เลือก"
                 android:textSize="12sp"
-                style="@style/Widget.Material3.Button.OutlinedButton" />
-
+                android:textColor="@color/text_secondary" />
         </LinearLayout>
-    </androidx.cardview.widget.CardView>
 
-    <!-- Section label -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="แอพที่ใช้จับคู่ออเดอร์"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:textColor="@color/text_primary"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="4dp" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="เลือกแอพที่ต้องการ — รับ notification ทุกแอพเหมือนเดิม จับคู่เฉพาะที่เลือก"
-        android:textSize="12sp"
-        android:textColor="@color/text_secondary"
-        android:paddingHorizontal="16dp"
-        android:paddingBottom="10dp" />
-
-    <!-- App list -->
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginHorizontal="16dp"
-        android:layout_marginBottom="16dp"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="2dp"
-        app:cardBackgroundColor="@color/surface">
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="@color/line" />
 
         <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="0dp"
+            android:layout_weight="1">
 
             <ProgressBar
                 android:id="@+id/progressBar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
+                android:indeterminateTint="@color/navy"
                 android:visibility="visible" />
 
             <androidx.recyclerview.widget.RecyclerView
@@ -130,10 +187,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
-                android:paddingVertical="4dp"
                 android:visibility="gone" />
-
         </FrameLayout>
-    </androidx.cardview.widget.CardView>
+    </LinearLayout>
 
 </LinearLayout>

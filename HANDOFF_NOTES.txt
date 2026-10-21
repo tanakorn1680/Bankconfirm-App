@@ -1,6 +1,6 @@
 =====================================================================
 HANDOFF NOTES — Bankconfirm-App (Android, Kotlin)
-อัปเดตล่าสุด: 22 ต.ค. 2026
+อัปเดตล่าสุด: 22 ต.ค. 2026 (งานที่ 2: ปรับหน้าตา UI ตามแดชบอร์ดแอดมิน — ดูข้อ 9)
 ไฟล์นี้ไว้ให้ AI/คนที่รับช่วงต่ออ่านแล้วเข้าใจสถานการณ์ได้ทันที
 =====================================================================
 
@@ -89,3 +89,47 @@ D. ไม่ได้ขอยกเว้น Battery Optimization -> ถูก 
 - แก้เฉพาะที่จำเป็น ไม่ทดสอบ/ไม่ทำงานเกินขอบเขต
 - ส่งมอบเป็น zip ที่มี "เฉพาะไฟล์ที่แก้" จัดโครงสร้างโฟลเดอร์ให้แตกเข้า root ของ repo แล้วทับของเดิมได้เลย
 - บันทึกความคืบหน้าไว้ในไฟล์นี้ (HANDOFF_NOTES.txt ที่ root) ทุกครั้งที่แก้
+
+9) งานที่ 2 — ปรับหน้าตา UI ให้เป็นแนวเดียวกับหน้าแอดมินแดชบอร์ด (22 ต.ค. 2026)
+---------------------------------------------------------------------
+เป้าหมายจากผู้ใช้: ทำธีม/การจัดวางของแอพให้เหมือนหน้า dashboard ของเว็บ (repo SCID-VC:
+  pages/admin/dashboard.html + css/admin-theme.css), ต้องยืนยัน/จับคู่ออเดอร์ได้เหมือนเดิม, ห้ามใช้อิโมจิ
+สมมติฐาน: "แอพ" ที่ต้องปรับคือแอพ Android นี้ (repo SCID-VC ถูกส่งมาเป็นแบบอ้างอิงธีม)
+
+ธีมที่ยึดจากเว็บ (css/admin-theme.css / dashboard.html)
+- พื้นหลังฟ้า #81CFF0, การ์ดขาวอมฟ้า (#F7FCFE) มุมโค้ง 18dp ขอบขาว เงานุ่ม
+- สีหลัก navy #1A6BA0, sky #2196C9, ทอง #D9A330/#B9821F, teal #2A9D8F, เขียว #3F8557, แดง #E04433, ตัวอักษร #1A3A52
+- ชื่อหน้า: ตัวขาวมีเงา + เส้นทองด้านซ้าย + คำอธิบายใต้ชื่อ (.page-title / .pg-sub)
+- การ์ดสถิติ 2 ช่อง (.stat-grid / .sc): ป้ายชื่อ + กล่องไอคอน 36dp + ตัวเลขใหญ่ + พิลล์สถานะ + คำอธิบาย
+- การ์ดรายการ (.ot-*): หัวการ์ด(ชื่อ+คำอธิบาย+พิลล์จำนวน) > แถบหัวคอลัมน์ > แถวคั่นเส้น (รหัส | ผู้ซื้อ/สินค้า | ยอด/สถานะ)
+- ปุ่มบนแถบหัวเป็นกระจกขาวโปร่ง (.back-link) ; ไอคอนเป็นเส้น (Feather) ไม่ใช้อิโมจิ/ตัวอักษรพิเศษ
+
+ไฟล์ที่แก้/เพิ่ม (งานที่ 2)
+[แก้] res/values/colors.xml, res/values/themes.xml (พาเลตใหม่ + status bar สีฟ้า; ชื่อสีเดิมยังอยู่ครบ)
+[แก้] res/layout/activity_main.xml (หัวหน้า + การ์ดสถิติ 2 ช่อง + การ์ดออเดอร์รอจับคู่ + การ์ดแจ้งเตือนล่าสุด)
+[แก้] res/layout/item_pending_order.xml, item_notification_log.xml, activity_settings.xml, item_app_pick.xml
+[ใหม่] res/drawable: bg_card, bg_card_warn, bg_glass, bg_gold_bar, bg_pill_{ok,warn,bad,neutral},
+       bg_result_{ok,warn,bad,neutral}, bg_icon_{gold,teal,navy}, divider_line,
+       ic_settings, ic_back, ic_clock, ic_bell, ic_alert (vector เส้น)
+[แก้] MainActivity.kt — เติมการ์ดสถิติ (จำนวนออเดอร์รอจับคู่ + สถานะการรับแจ้งเตือนจาก ListenerHealth),
+       พิลล์สีผลการจับคู่ (resultKind), รหัสออเดอร์ #XXXXXX ในแถว, เส้นคั่นสีธีม
+[แก้] SettingsActivity.kt — เส้นคั่นสีธีมเท่านั้น
+[แก้] service/NotificationListenerService.kt — เอาอิโมจิออกจากข้อความผลลัพธ์ (คำสำคัญเดิมอยู่ครบ)
+[แก้] data/NotificationLog.kt — แก้คอมเมนต์
+
+สิ่งที่ "ไม่เปลี่ยน" (การยืนยัน/จับคู่ออเดอร์ทำงานเหมือนเดิม)
+- ลอจิก parse ยอด, ApiClient (/api/bank-amount), serviceScope, ListenerHealth/KeepAlive (งานที่ 1) ไม่ถูกแตะ
+- view id เดิมทั้งหมดยังอยู่ (btnSettings, btnOpenSettings, cardAccessWarning, rvOrders, rvLog, tvOrderCount,
+  tvLogCount, tvLastRefresh, tvOrdersEmpty, tvLogEmpty, btnBack, btnSave, progressBar, rvApps ฯลฯ)
+  ชนิด view ที่เปลี่ยน: btnSettings/btnBack จาก TextView -> ImageView, cardAccessWarning จาก CardView -> LinearLayout
+  (โค้ดใช้แค่ setOnClickListener/visibility จึงเข้ากันได้)
+
+ข้อควรระวัง
+- MainActivity.resultKind() เลือกสีพิลล์จากคำในข้อความผลลัพธ์: "จับคู่สำเร็จ", "รอ admin approve",
+  "parse ยอดไม่ได้", "ไม่พบ order", "Error:" — ถ้าแก้ข้อความใน TestNotificationService ต้องแก้ resultKind ตาม
+- ยังไม่ได้ compile/ทดสอบบนเครื่อง (ผู้ใช้สั่งไม่ต้องทดสอบ) ; ฟอนต์ใช้ของระบบ (เว็บใช้ Baloo 2 / IBM Plex Sans Thai
+  ซึ่งต้องฝังไฟล์ฟอนต์ถึงจะเหมือนเป๊ะ)
+- ไม่มีอิโมจิใน UI แล้ว (ตรวจด้วย regex ทั้ง app/src) ; README.md ยังมี "✓" ในคำอธิบายเก่า (ไม่ใช่ UI)
+
+ขั้นต่อไปที่เป็นไปได้
+- ถ้าต้องการให้เหมือนเว็บยิ่งขึ้น: แท็บกรองรายการ (ทั้งหมด/สำเร็จ/รอตรวจสอบ), ฝังฟอนต์, การ์ดทางลัด

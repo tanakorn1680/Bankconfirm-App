@@ -54,7 +54,11 @@ class MainActivity : AppCompatActivity() {
 
     // poll orders ทุก 10 วินาที
     private val pollOrders = object : Runnable {
-        override fun run() { loadPendingOrders(); handler.postDelayed(this, 10_000L) }
+        override fun run() {
+            loadPendingOrders()
+            refreshAccessWarning()
+            handler.postDelayed(this, 10_000L)
+        }
     }
 
     // อัปเดตเวลาแบบ real-time ทุก 1 วินาที
@@ -113,7 +117,7 @@ class MainActivity : AppCompatActivity() {
         binding.rvLog.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = logAdapter
-            addItemDecoration(DividerItemDecoration(context, DividerItemDecoration.VERTICAL))
+            addItemDecoration(lineDivider())
             isNestedScrollingEnabled = false
         }
 
@@ -121,10 +125,16 @@ class MainActivity : AppCompatActivity() {
         binding.rvOrders.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = orderAdapter
-            addItemDecoration(DividerItemDecoration(context, DividerItemDecoration.VERTICAL))
+            addItemDecoration(lineDivider())
             isNestedScrollingEnabled = false
         }
     }
+
+    /** เส้นคั่นรายการสีเดียวกับเส้นในหน้าแดชบอร์ดของเว็บ */
+    private fun lineDivider(): DividerItemDecoration =
+        DividerItemDecoration(this, DividerItemDecoration.VERTICAL).apply {
+            ContextCompat.getDrawable(this@MainActivity, R.drawable.divider_line)?.let { setDrawable(it) }
+        }
 
     private fun setupButtons() {
         binding.btnSettings.setOnClickListener {
@@ -142,6 +152,14 @@ class MainActivity : AppCompatActivity() {
     private fun refreshAccessWarning() {
         val enabled = isNotificationAccessEnabled()
         binding.cardAccessWarning.visibility = if (enabled) View.GONE else View.VISIBLE
+
+        // การ์ดสถิติ: สถานะการรับแจ้งเตือน
+        val pill = binding.tvStatListenerPill
+        when {
+            !enabled                  -> pill.setPill("ปิดอยู่", PillKind.BAD)
+            ListenerHealth.connected  -> pill.setPill("กำลังรับแจ้งเตือน", PillKind.OK)
+            else                      -> pill.setPill("กำลังเชื่อมต่อ", PillKind.WARN)
+        }
     }
 
     private fun isNotificationAccessEnabled(): Boolean {
@@ -156,7 +174,9 @@ class MainActivity : AppCompatActivity() {
     private fun refreshLog() {
         val logs = AppState.getLogs()
         logAdapter.submitList(logs)
-        binding.tvLogCount.text = if (logs.isEmpty()) "" else "${logs.size} รายการ"
+        binding.tvLogCount.text = "${logs.size} รายการ"
+        binding.tvLogCount.visibility = if (logs.isEmpty()) View.GONE else View.VISIBLE
+        binding.tvStatLogs.text = logs.size.toString()
         binding.tvLogEmpty.visibility = if (logs.isEmpty()) View.VISIBLE else View.GONE
         binding.rvLog.visibility      = if (logs.isEmpty()) View.GONE   else View.VISIBLE
     }
@@ -171,9 +191,15 @@ class MainActivity : AppCompatActivity() {
             if (result is ApiClient.PendingOrdersResult.Success) {
                 val orders = result.orders
                 orderAdapter.submitList(orders)
-                binding.tvOrderCount.text  = if (orders.isEmpty()) "" else "${orders.size} รายการ"
+                binding.tvOrderCount.text  = "${orders.size} รายการ"
+                binding.tvOrderCount.visibility = if (orders.isEmpty()) View.GONE else View.VISIBLE
+                binding.tvStatOrders.text = orders.size.toString()
+                if (orders.isEmpty()) binding.tvStatOrdersPill.setPill("เคลียร์แล้ว", PillKind.OK)
+                else                  binding.tvStatOrdersPill.setPill("รอยอดโอน", PillKind.WARN)
                 binding.tvOrdersEmpty.visibility = if (orders.isEmpty()) View.VISIBLE else View.GONE
                 binding.rvOrders.visibility      = if (orders.isEmpty()) View.GONE   else View.VISIBLE
+            } else {
+                binding.tvStatOrdersPill.setPill("โหลดไม่สำเร็จ", PillKind.BAD)
             }
         }
     }
@@ -255,7 +281,15 @@ class LogAdapter(private val timeFmt: SimpleDateFormat)
             tvBig.text     = ""
             tvSub.text     = ""
             if (log.matchResult != null) {
-                tvMatchResult.text       = log.matchResult
+                val kind = resultKind(log.matchResult)
+                tvMatchResult.text = log.matchResult
+                tvMatchResult.setBackgroundResource(when (kind) {
+                    PillKind.OK      -> R.drawable.bg_result_ok
+                    PillKind.WARN    -> R.drawable.bg_result_warn
+                    PillKind.BAD     -> R.drawable.bg_result_bad
+                    PillKind.NEUTRAL -> R.drawable.bg_result_neutral
+                })
+                tvMatchResult.setTextColor(ContextCompat.getColor(tvMatchResult.context, kind.colorRes()))
                 tvMatchResult.visibility = View.VISIBLE
             } else {
                 tvMatchResult.visibility = View.GONE
@@ -283,12 +317,14 @@ class OrderAdapter(
     override fun onBindViewHolder(holder: VH, position: Int) = holder.bind(items[position])
 
     inner class VH(view: View) : RecyclerView.ViewHolder(view) {
+        private val tvOrderId = view.findViewById<TextView>(R.id.tvOrderId)
         private val tvProduct = view.findViewById<TextView>(R.id.tvProduct)
         private val tvAmount  = view.findViewById<TextView>(R.id.tvAmount)
         private val tvEmail   = view.findViewById<TextView>(R.id.tvEmail)
         private val tvTime    = view.findViewById<TextView>(R.id.tvTime)
 
         fun bind(o: PendingOrder) {
+            tvOrderId.text = "#${o.id.take(6).uppercase()}"
             tvProduct.text = o.productLabel
             tvAmount.text  = "฿${amtFmt.format(o.uniqueAmount)}"
             tvEmail.text   = o.userEmail
@@ -296,4 +332,38 @@ class OrderAdapter(
             tvTime.text    = date?.let { dateFmt.format(it) } ?: o.createdAt.take(16)
         }
     }
+}
+
+// =============================================================================
+// Pill helpers — สีสถานะเดียวกับพิลล์ในหน้าแดชบอร์ดของเว็บ
+// =============================================================================
+
+internal enum class PillKind { OK, WARN, BAD, NEUTRAL }
+
+internal fun PillKind.colorRes(): Int = when (this) {
+    PillKind.OK      -> R.color.status_on
+    PillKind.WARN    -> R.color.gold_deep
+    PillKind.BAD     -> R.color.status_off
+    PillKind.NEUTRAL -> R.color.text_secondary
+}
+
+internal fun TextView.setPill(label: String, kind: PillKind) {
+    text = label
+    setBackgroundResource(when (kind) {
+        PillKind.OK      -> R.drawable.bg_pill_ok
+        PillKind.WARN    -> R.drawable.bg_pill_warn
+        PillKind.BAD     -> R.drawable.bg_pill_bad
+        PillKind.NEUTRAL -> R.drawable.bg_pill_neutral
+    })
+    setTextColor(ContextCompat.getColor(context, kind.colorRes()))
+}
+
+/** เลือกสีพิลล์จากข้อความผลการจับคู่ที่ TestNotificationService สร้าง */
+internal fun resultKind(text: String): PillKind = when {
+    "จับคู่สำเร็จ" in text      -> PillKind.OK
+    "รอ admin approve" in text -> PillKind.WARN
+    "parse ยอดไม่ได้" in text   -> PillKind.WARN
+    "ไม่พบ order" in text      -> PillKind.BAD
+    "Error:" in text           -> PillKind.BAD
+    else                       -> PillKind.NEUTRAL
 }

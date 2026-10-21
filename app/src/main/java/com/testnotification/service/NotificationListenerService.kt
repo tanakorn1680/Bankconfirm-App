@@ -148,13 +148,13 @@ class TestNotificationService : NotificationListenerService() {
 
         if (amount == null) {
             Log.d(TAG, "[$bankLabel] ไม่พบยอดเงินใน: $fullText")
-            AppState.updateLastLog("⚠️ [$bankLabel] อ่านได้แต่ parse ยอดไม่ได้: $fullText")
+            AppState.updateLastLog("[$bankLabel] อ่านได้แต่ parse ยอดไม่ได้: $fullText")
             broadcast()
             return
         }
 
         Log.i(TAG, "[$bankLabel] พบยอด ${AmountParser.format(amount)} — ส่ง API...")
-        AppState.updateLastLog("⏳ ${AmountParser.format(amount)} [$bankLabel] กำลังจับคู่...")
+        AppState.updateLastLog("${AmountParser.format(amount)} [$bankLabel] กำลังจับคู่...")
         broadcast()
 
         val notifId = "${pkg}_${sbn.postTime}_${amount}"
@@ -170,21 +170,21 @@ class TestNotificationService : NotificationListenerService() {
 
             val resultText = when (result) {
                 is ApiClient.ConfirmResult.Matched ->
-                    "✅ จับคู่สำเร็จ! Order: ${result.orderId}"
+                    "จับคู่สำเร็จ Order: ${result.orderId}"
                 is ApiClient.ConfirmResult.AwaitingReview ->
-                    "🔶 Match แล้ว รอ admin approve: ${result.orderId} (${result.reason})"
+                    "Match แล้ว รอ admin approve: ${result.orderId} (${result.reason})"
                 is ApiClient.ConfirmResult.NoMatch ->
-                    "❌ ไม่พบ order ที่ตรง (${AmountParser.format(amount)})"
+                    "ไม่พบ order ที่ตรง (${AmountParser.format(amount)})"
                 is ApiClient.ConfirmResult.Duplicate ->
-                    "⏭️ Notification ซ้ำ — ข้ามแล้ว"
+                    "Notification ซ้ำ — ข้ามแล้ว"
                 is ApiClient.ConfirmResult.TestReceived ->
-                    "🧪 Test received"
+                    "Test received"
                 is ApiClient.ConfirmResult.Failure ->
-                    "💥 Error: ${result.message}"
+                    "Error: ${result.message}"
             }
 
             Log.i(TAG, "match result: $resultText")
-            AppState.updateLastLog("${AmountParser.format(amount)} [$bankLabel] → $resultText")
+            AppState.updateLastLog("${AmountParser.format(amount)} [$bankLabel]: $resultText")
             broadcast()
         }
     }

@@ -1,18 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- พาเลตเดียวกับหน้าแอดมินแดชบอร์ดของเว็บ (css/admin-theme.css) -->
 <resources>
-    <color name="background">#F2F4F7</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="text_primary">#1A1D23</color>
-    <color name="text_secondary">#6B7280</color>
-    <color name="status_on">#16A34A</color>
-    <color name="status_off">#DC2626</color>
-    <color name="colorPrimary">#1D4ED8</color>
+    <!-- พื้นหลังฟ้า / การ์ดขาว -->
+    <color name="background">#81CFF0</color>
+    <color name="surface">#F7FCFE</color>
+    <color name="white">#FFFFFF</color>
+
+    <!-- ตัวอักษร -->
+    <color name="text_primary">#1A3A52</color>
+    <color name="text_secondary">#7A8E9C</color>
+
+    <!-- สีหลักของแบรนด์ -->
+    <color name="navy">#1A6BA0</color>
+    <color name="sky">#2196C9</color>
+    <color name="gold">#D9A330</color>
+    <color name="gold_deep">#B9821F</color>
+    <color name="teal">#2A9D8F</color>
+
+    <!-- สถานะ -->
+    <color name="status_on">#3F8557</color>
+    <color name="status_off">#E04433</color>
+
+    <!-- พื้นหลังพิลล์ / กล่องไอคอน / เส้นคั่น -->
+    <color name="pill_ok_bg">#1F3F8557</color>
+    <color name="pill_warn_bg">#2ED9A330</color>
+    <color name="pill_bad_bg">#1AE04433</color>
+    <color name="pill_neutral_bg">#121A3A52</color>
+    <color name="line">#2E1A6BA0</color>
+    <color name="strip_bg">#0D1A6BA0</color>
+    <color name="card_border">#B3FFFFFF</color>
+    <color name="glass_fill">#38FFFFFF</color>
+    <color name="glass_border">#66FFFFFF</color>
+    <color name="shadow_text">#4D002850</color>
+
+    <!-- ชื่อเดิมที่ยังอ้างอิงอยู่ -->
+    <color name="colorPrimary">#1A6BA0</color>
     <color name="colorOnPrimary">#FFFFFF</color>
-    <color name="colorSecondary">#6B7280</color>
+    <color name="colorSecondary">#2196C9</color>
     <color name="colorOnSecondary">#FFFFFF</color>
-    <color name="colorSurface">#FFFFFF</color>
-    <color name="colorError">#DC2626</color>
-    <color name="tab_active">#1D4ED8</color>
-    <color name="tab_inactive">#6B7280</color>
-    <color name="amount_color">#1D4ED8</color>
+    <color name="colorSurface">#F7FCFE</color>
+    <color name="colorError">#E04433</color>
+    <color name="tab_active">#1A6BA0</color>
+    <color name="tab_inactive">#7A8E9C</color>
+    <color name="amount_color">#1A3A52</color>
 </resources>

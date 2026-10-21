@@ -5,10 +5,14 @@ package com.testnotification.data
  *
  * เพิ่ม matchResult: แสดงผลการจับคู่ order
  *   null   = ยังไม่ได้ส่ง API (ไม่ใช่ notification ธนาคาร)
- *   "⏳…"  = กำลังจับคู่
- *   "✅…"  = จับคู่สำเร็จ
- *   "❌…"  = ไม่พบ order
- *   "💥…"  = error
+ *   "…กำลังจับคู่..."          = กำลังจับคู่
+ *   "จับคู่สำเร็จ …"           = จับคู่สำเร็จ
+ *   "Match แล้ว รอ admin …"    = รอแอดมินอนุมัติ
+ *   "ไม่พบ order …"            = ไม่พบ order
+ *   "Error: …"                = error
+ *
+ * หมายเหตุ: MainActivity.kt (resultKind) ใช้คำข้างบนเลือกสีของพิลล์ผลลัพธ์
+ * ถ้าเปลี่ยนข้อความใน TestNotificationService ให้แก้ resultKind ตาม
  */
 data class NotificationLog(
     val timeMs:      Long,
