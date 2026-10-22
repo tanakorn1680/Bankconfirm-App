@@ -6,7 +6,13 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.Network
+import androidx.core.content.ContextCompat
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
@@ -21,8 +27,9 @@ import com.testnotification.receiver.AlarmReceiver
  * หลักการ (event-driven):
  * - งานจริงเริ่มตอนมีแจ้งเตือนของแอพที่เลือกไว้เท่านั้น (TestNotificationService
  *   ถูกระบบปลุกเอง) และถือ WakeLock สั้นๆ เฉพาะช่วงส่ง API
- * - service นี้ทำหน้าที่แค่ให้โปรเซสมี priority สูง (foreground) กัน OEM ฆ่า
- *   + ตั้ง alarm one-shot ทุก 15 นาทีเพื่อตรวจ/ซ่อม listener ที่หลุด bind
+ * - service นี้ทำหน้าที่ให้โปรเซสมี priority สูง (foreground) กัน OEM ฆ่า
+ *   + ตั้ง alarm one-shot ทุก 1 นาที + ฟังเหตุการณ์ เน็ตกลับมา/จอเปิดปิด -> OrderWatcher.tick()
+ *   (ตรวจ/ซ่อม listener, แจ้งออเดอร์ใหม่, อ่านแจ้งเตือนที่ค้าง)
  * - startService() จากเบื้องหลังอาจ throw บน Android 8+/12+ → ครอบ try/catch
  *   (crash = ลาก NotificationListener ตายไปด้วย)
  */
@@ -33,8 +40,9 @@ class KeepAliveService : Service() {
         private const val CHANNEL_ID        = "payment_keepalive"
         private const val NOTIF_ID          = 1001
 
-        // AlarmManager backup — ทำให้ OS ปลุก service ทุก 15 นาที
-        private const val ALARM_INTERVAL_MS = 15 * 60 * 1000L
+        // alarm one-shot ทุก 1 นาที: ตรวจ listener + เช็กออเดอร์ใหม่ + อ่านแจ้งเตือนที่ค้าง (ทำเฉพาะตอนมีเน็ต)
+        // ปรับค่านี้ได้ — ยาวขึ้น = ประหยัดแบตกว่า แต่แจ้งออเดอร์ใหม่ช้าลง
+        private const val ALARM_INTERVAL_MS = 60 * 1000L
         private const val ALARM_REQUEST     = 9001
 
         /**
@@ -77,6 +85,44 @@ class KeepAliveService : Service() {
             )
     }
 
+    // ตัวกระตุ้นตามเหตุการณ์: เน็ตกลับมา / จอเปิด-ปิด -> OrderWatcher.tick (ไม่มีเน็ตจะข้ามเอง)
+    private val netCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            OrderWatcher.tick(applicationContext, "network")
+        }
+    }
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            OrderWatcher.tick(applicationContext, "screen")
+        }
+    }
+    private var triggersRegistered = false
+
+    private fun registerTriggers() {
+        if (triggersRegistered) return
+        try {
+            getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(netCallback)
+            ContextCompat.registerReceiver(
+                this, screenReceiver,
+                IntentFilter().apply {
+                    addAction(Intent.ACTION_SCREEN_ON)
+                    addAction(Intent.ACTION_SCREEN_OFF)
+                },
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
+            triggersRegistered = true
+        } catch (e: Exception) {
+            Log.w(TAG, "registerTriggers failed: ${e.message}")
+        }
+    }
+
+    private fun unregisterTriggers() {
+        if (!triggersRegistered) return
+        triggersRegistered = false
+        try { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(netCallback) } catch (_: Exception) {}
+        try { unregisterReceiver(screenReceiver) } catch (_: Exception) {}
+    }
+
     // =========================================================================
     // Lifecycle
     // =========================================================================
@@ -88,6 +134,7 @@ class KeepAliveService : Service() {
         createChannel()
         startForeground(NOTIF_ID, buildNotification())
         scheduleAlarm(applicationContext)   // ← AlarmManager backup (one-shot)
+        registerTriggers()
         Log.d(TAG, "created")
     }
 
@@ -95,6 +142,7 @@ class KeepAliveService : Service() {
         // ถูกปลุกโดย AlarmManager / BootReceiver / เปิดแอพ
         scheduleAlarm(applicationContext)   // alarm เป็นแบบ one-shot — ตั้งรอบถัดไปเสมอ
         reconnectNotificationListener("onStartCommand")
+        OrderWatcher.tick(applicationContext, "onStartCommand")
         return START_STICKY
     }
 
@@ -107,6 +155,7 @@ class KeepAliveService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.w(TAG, "destroyed — restarting")
+        unregisterTriggers()
         // AlarmManager จะ restart อยู่แล้ว แต่ startService เพิ่มเผื่อ OS อนุญาต
         safeRestartSelf()
     }

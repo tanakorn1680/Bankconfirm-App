@@ -7,11 +7,12 @@ import android.os.Build
 import android.util.Log
 import com.testnotification.service.KeepAliveService
 import com.testnotification.service.ListenerHealth
+import com.testnotification.service.OrderWatcher
 
 /**
- * AlarmReceiver — รับ alarm จาก AlarmManager (ทุก ~15 นาที)
+ * AlarmReceiver — รับ alarm จาก AlarmManager (ทุก ~1 นาที)
  *
- * ทำ 3 อย่าง โดยไม่ปล่อยให้ exception หลุด (หลุด = โปรเซส crash = listener ตาย):
+ * ทำ 4 อย่าง โดยไม่ปล่อยให้ exception หลุด (หลุด = โปรเซส crash = listener ตาย):
  * 1. ตั้ง alarm รอบถัดไป (alarm เป็นแบบ one-shot / setAndAllowWhileIdle)
  * 2. พยายาม start KeepAliveService — Android 12+ อาจไม่อนุญาตจากเบื้องหลัง จึงต้อง try/catch
  * 3. ตรวจ NotificationListener และซ่อมถ้าหลุด bind (ทำได้แม้ข้อ 2 ล้มเหลว)
@@ -34,5 +35,8 @@ class AlarmReceiver : BroadcastReceiver() {
         }
 
         ListenerHealth.ensureBound(context.applicationContext, "alarm")
+
+        // เช็กออเดอร์ใหม่ + อ่านแจ้งเตือนที่ค้างอยู่ (ทำเฉพาะตอนมีเน็ต)
+        OrderWatcher.tick(context.applicationContext, "alarm")
     }
 }

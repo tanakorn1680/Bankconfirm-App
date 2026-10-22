@@ -1,6 +1,6 @@
 =====================================================================
 HANDOFF NOTES — Bankconfirm-App (Android, Kotlin)
-อัปเดตล่าสุด: 22 ต.ค. 2026 (งานที่ 2: ธีมตามแดชบอร์ด — ข้อ 9 ; งานที่ 3: ปุ่มอ่านแจ้งเตือนที่ค้างอยู่ — ข้อ 10 ; งานที่ 4: ลดการใช้ทรัพยากร/ทำงานตามเหตุการณ์ — ข้อ 11)
+อัปเดตล่าสุด: 22 ต.ค. 2026 (งานที่ 2: ธีมตามแดชบอร์ด — ข้อ 9 ; งานที่ 3: ปุ่มอ่านแจ้งเตือนที่ค้างอยู่ — ข้อ 10 ; งานที่ 4: ลดการใช้ทรัพยากร/ทำงานตามเหตุการณ์ — ข้อ 11 ; งานที่ 5: แจ้งเตือนออเดอร์ใหม่ + อ่านแจ้งเตือนอัตโนมัติ — ข้อ 12)
 ไฟล์นี้ไว้ให้ AI/คนที่รับช่วงต่ออ่านแล้วเข้าใจสถานการณ์ได้ทันที
 =====================================================================
 
@@ -196,3 +196,34 @@ D. ไม่ได้ขอยกเว้น Battery Optimization -> ถูก 
   (ต้องเพิ่ม dependency work-runtime-ktx ใน gradle/libs.versions.toml + app/build.gradle.kts)
 - ยังไม่ได้ compile/ทดสอบบนเครื่อง (ผู้ใช้สั่งไม่ต้องทดสอบ) — จุดเสี่ยง compile: KeepAliveService.kt (ลบโค้ดหลายส่วน),
   NotificationListenerService.kt (companion workScope + acquire/releaseWorkWakeLock)
+
+12) งานที่ 5 — แจ้งเตือนออเดอร์ใหม่ + อ่านแจ้งเตือนที่ค้างอัตโนมัติ (จอเปิด/ปิดก็ได้ ขอแค่มีเน็ต) (22 ต.ค. 2026)
+---------------------------------------------------------------------
+เป้าหมายจากผู้ใช้: (ก) ให้มีแจ้งเตือนบนเครื่องตอนออเดอร์เข้า (ข) ให้อ่านแจ้งเตือนปัจจุบันเองได้ไม่ว่าจอเปิดหรือปิด ขอแค่มีอินเทอร์เน็ต
+การตีความ: "ออเดอร์เข้า" = ออเดอร์ใหม่รอชำระ (poll จาก API) + ผลจับคู่เงินเข้า (จับคู่สำเร็จ/รอแอดมิน/ไม่พบออเดอร์)
+
+ไฟล์ใหม่: service/OrderWatcher.kt (object)
+- tick(ctx, reason): ข้ามถ้าไม่มีเน็ต ; กันถี่ (15 วิ) ; ถือ WakeLock 90 วิระหว่างทำงาน ; ทำ 2 อย่าง
+  1) pollOrders: ApiClient.fetchPendingOrders() -> เทียบกับรายการ id ที่เคยเห็น (SharedPreferences "order_watch",
+     เก็บเฉพาะออเดอร์ที่ยังรอชำระ) -> ออเดอร์ใหม่ส่งแจ้งเตือน (channel order_new, IMPORTANCE_HIGH)
+     ครั้งแรกหลังติดตั้งแค่จดรายการ ไม่แจ้ง ; เกิน 3 ออเดอร์พร้อมกันรวมเป็นแจ้งเตือนเดียว
+  2) TestNotificationService.instance?.scanActiveNotifications(auto = true)
+- notifyResult(): แจ้งเตือนผลจับคู่ (channel pay_result) เฉพาะ Matched / AwaitingReview / NoMatch
+  (ไม่แจ้ง Duplicate/Test/Failure กันรบกวน)
+- ตัวกระตุ้น tick: alarm ทุก 1 นาที (AlarmReceiver), เน็ตกลับมา (NetworkCallback ใน KeepAliveService),
+  จอเปิด/ปิด (receiver ใน KeepAliveService), onStartCommand, onListenerConnected
+
+ไฟล์ที่แก้
+[แก้] service/KeepAliveService.kt — ALARM_INTERVAL_MS 15 นาที -> 1 นาที (ค่าเดียวปรับได้), register/unregister NetworkCallback + screen receiver
+[แก้] receiver/AlarmReceiver.kt — เรียก OrderWatcher.tick ต่อท้าย
+[แก้] service/NotificationListenerService.kt — scanActiveNotifications(auto: Boolean = false) ; โหมด auto ส่งเฉพาะอันที่ยังไม่เคยส่ง/Error/
+   ค้าง "กำลังจับคู่" เกิน 2 นาที (อันที่เซิร์ฟเวอร์ตอบแล้ว เช่น ไม่พบ order/ซ้ำ จะไม่ยิงซ้ำทุกนาที) ; เรียก notifyResult หลังได้ผล
+   ; onListenerConnected เรียก tick  (ปุ่มกดเองใน MainActivity ใช้ค่า default auto=false พฤติกรรมเดิม)
+
+ข้อจำกัดที่ต้องรู้ (สำคัญ)
+- จอปิดนานจน Doze ลึก: ระบบหน่วง alarm ให้ห่าง (ประมาณ 9 นาทีขึ้นไป แม้ยกเว้นแบต) -> แจ้งออเดอร์ใหม่อาจช้า ไม่ใช่ทันที
+  ส่วนแจ้งเตือนธนาคารยังเข้าทันทีเพราะเป็น event จาก listener. ทางที่ทันทีจริงคือ push (FCM) จากเซิร์ฟเวอร์ —
+  ต้องแก้ฝั่งเว็บ (mayorservice.vercel.app ไม่อยู่ใน repo นี้) + เพิ่ม firebase-messaging + google-services.json
+- ค่าใช้จ่ายแบต: poll 1 ครั้ง/นาทีตอนมีเน็ต (1 HTTPS GET สั้นๆ) ถ้าหนักไปให้เพิ่ม ALARM_INTERVAL_MS
+- รายการ id ที่เห็นแล้ว ถ้าผู้ใช้ล้างข้อมูลแอพ จะถือเป็น "ครั้งแรก" ใหม่ (ไม่แจ้งออเดอร์ที่มีอยู่)
+- ยังไม่ได้ compile/ทดสอบบนเครื่อง (ผู้ใช้สั่งไม่ต้องทดสอบ) — จุดเสี่ยง compile: OrderWatcher.kt, KeepAliveService.kt, NotificationListenerService.kt

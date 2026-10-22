@@ -98,6 +98,7 @@ class TestNotificationService : NotificationListenerService() {
         ListenerHealth.connected = true
         instance = this
         Log.d(TAG, "Listener connected")
+        OrderWatcher.tick(applicationContext, "listener-connected")
     }
 
     override fun onListenerDisconnected() {
@@ -177,6 +178,7 @@ class TestNotificationService : NotificationListenerService() {
                 Log.i(TAG, "match result: $resultText")
                 AppState.updateLogResult(log.key, "${AmountParser.format(amount)} [$bankLabel]: $resultText")
                 broadcast()
+                OrderWatcher.notifyResult(applicationContext, result, amount, bankLabel)
             } finally {
                 releaseWorkWakeLock(wl)
             }
@@ -207,10 +209,14 @@ class TestNotificationService : NotificationListenerService() {
     // ไม่ช่วยเมื่อ: เซิร์ฟเวอร์รับแจ้งเตือนนั้นไว้แล้วแต่ไม่พบออเดอร์ (ซ้ำ -> ไม่จับคู่ใหม่ ให้แอดมินตรวจเอง)
     // =========================================================================
 
-    suspend fun scanActiveNotifications(): ScanResult {
+    /**
+     * @param auto true = เรียกอัตโนมัติจาก OrderWatcher (เน็ตกลับมา/จอเปิดปิด/alarm) — ส่งเฉพาะแจ้งเตือนที่ยังไม่เคยส่ง,
+     *             ส่งพลาด (Error) หรือค้าง "กำลังจับคู่" เกิน 2 นาที ; false = ผู้ใช้กดปุ่มเอง (ส่งซ้ำได้ ปลอดภัยเพราะเซิร์ฟเวอร์กันซ้ำ)
+     */
+    suspend fun scanActiveNotifications(auto: Boolean = false): ScanResult {
         if (!scanning.compareAndSet(false, true)) return ScanResult(error = "กำลังอ่านอยู่")
         try {
-            return withContext(Dispatchers.IO) { scanInternal() }
+            return withContext(Dispatchers.IO) { scanInternal(auto) }
         } catch (e: Exception) {
             Log.e(TAG, "scan error: ${e.message}", e)
             return ScanResult(error = e.message ?: "เกิดข้อผิดพลาด")
@@ -219,7 +225,7 @@ class TestNotificationService : NotificationListenerService() {
         }
     }
 
-    private fun scanInternal(): ScanResult {
+    private fun scanInternal(auto: Boolean): ScanResult {
         val active: Array<StatusBarNotification> = try {
             getActiveNotifications() ?: emptyArray()
         } catch (e: Exception) {
@@ -240,6 +246,12 @@ class TestNotificationService : NotificationListenerService() {
 
             val prev = AppState.findLog(log.key)?.matchResult
             if (prev != null && isFinalResult(prev)) { done++; continue }
+
+            if (auto && prev != null) {
+                // โหมดอัตโนมัติ: ไม่ส่งซ้ำอันที่เซิร์ฟเวอร์ตอบแล้ว (เช่น ไม่พบ order/ซ้ำ) กันยิง API ทุกนาที
+                val stuck = "กำลังจับคู่" in prev && now - sbn.postTime > 2 * 60 * 1000L
+                if (!("Error:" in prev || stuck)) { done++; continue }
+            }
 
             if (AppState.findLog(log.key) == null) AppState.addLog(log)
 
@@ -273,6 +285,7 @@ class TestNotificationService : NotificationListenerService() {
 
             AppState.updateLogResult(log.key, text)
             broadcast()
+            OrderWatcher.notifyResult(applicationContext, result, amount, bankLabel)
         }
 
         Log.i(TAG, "scan: found=$found sent=$sent matched=$matched done=$done old=$old noAmount=$noAmount")
