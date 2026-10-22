@@ -1,6 +1,6 @@
 =====================================================================
 HANDOFF NOTES — Bankconfirm-App (Android, Kotlin)
-อัปเดตล่าสุด: 22 ต.ค. 2026 (งานที่ 2: ปรับหน้าตา UI ตามแดชบอร์ดแอดมิน — ดูข้อ 9)
+อัปเดตล่าสุด: 22 ต.ค. 2026 (งานที่ 2: ธีมตามแดชบอร์ด — ข้อ 9 ; งานที่ 3: ปุ่มอ่านแจ้งเตือนที่ค้างอยู่ — ข้อ 10)
 ไฟล์นี้ไว้ให้ AI/คนที่รับช่วงต่ออ่านแล้วเข้าใจสถานการณ์ได้ทันที
 =====================================================================
 
@@ -133,3 +133,33 @@ D. ไม่ได้ขอยกเว้น Battery Optimization -> ถูก 
 
 ขั้นต่อไปที่เป็นไปได้
 - ถ้าต้องการให้เหมือนเว็บยิ่งขึ้น: แท็บกรองรายการ (ทั้งหมด/สำเร็จ/รอตรวจสอบ), ฝังฟอนต์, การ์ดทางลัด
+
+10) งานที่ 3 — ปุ่ม "อ่านแจ้งเตือนที่มีอยู่ตอนนี้" (22 ต.ค. 2026)
+---------------------------------------------------------------------
+เป้าหมายจากผู้ใช้: เผื่อแอพจับคู่ไม่ได้ ให้เข้าแอพแล้วกดปุ่มอ่านแจ้งเตือนที่ค้างอยู่ในแถบแจ้งเตือน
+  (notification shade) ตอนนี้ แล้วส่งไปจับคู่เอง ; หน้าตาต้องเข้ากับธีมเดิม ; ไม่ใช้อิโมจิ
+
+วิธีทำงาน
+- ปุ่ม btnScanNow อยู่ในการ์ด "แจ้งเตือนล่าสุด" (activity_main.xml) + ข้อความสรุป tvScanStatus ใต้ปุ่ม
+- MainActivity.runManualScan() -> TestNotificationService.instance.scanActiveNotifications()
+  (instance เป็น static ตั้งใน onListenerConnected / ล้างใน onListenerDisconnected, onDestroy)
+- scanInternal(): getActiveNotifications() -> กรองเฉพาะแอพที่เลือกไว้ในตั้งค่า -> เรียงเก่า->ใหม่ ->
+    * เก่ากว่า SCAN_MAX_AGE_MS (30 นาที) ข้าม (กันแจ้งเตือนเก่าไปจับคู่ออเดอร์ใหม่ที่ยอดซ้ำ ; ปรับค่าได้ใน companion)
+    * ผลเดิมเป็น "จับคู่สำเร็จ"/"รอ admin approve" ข้าม
+    * ที่เหลือ parse ยอด -> ApiClient.confirmPayment ด้วย notification_id รูปแบบเดิม (pkg_postTime_amount)
+- ปลอดภัยต่อการกดซ้ำ: เซิร์ฟเวอร์ (api/bank-amount.js) INSERT bank_notifications ก่อนจับคู่ มี UNIQUE(notification_id)
+  ซ้ำ -> ตอบ "duplicate, ignored" ไม่ตัดยอดซ้ำ
+- ข้อจำกัดที่ต้องรู้: ถ้าเซิร์ฟเวอร์เคย "รับแจ้งเตือนไว้แล้วแต่ไม่พบออเดอร์/จับคู่พลาด" การส่งซ้ำจะได้ duplicate
+  ไม่จับคู่ใหม่ (ต้องให้แอดมินอนุมัติเองในเว็บ) — ปุ่มนี้ช่วยกรณีแอพ "พลาดไม่เคยส่ง", เน็ตล้มตอนส่ง, ผลค้าง "กำลังจับคู่"
+  (ไม่เปลี่ยน notification_id เพื่อ retry เพราะเสี่ยงจับคู่ซ้ำกับออเดอร์อื่นที่ยอด unique_amount เท่ากัน ;
+   RPC auto_match_payment ไม่อยู่ใน repo จึงยืนยันไม่ได้ว่าตรวจช่วงเวลาไหม)
+- ถ้า listener ยังไม่ connected: ปุ่มเรียก ListenerHealth.ensureBound() แล้วแจ้งให้กดใหม่
+
+ไฟล์ที่แก้ (งานที่ 3)
+[แก้] service/NotificationListenerService.kt — แยก buildLog/describe/notificationIdOf, เพิ่ม scanActiveNotifications(),
+       instance, ScanResult ; ผลจับคู่อัปเดตตาม key (AppState.updateLogResult) แทน updateLastLog
+       (แก้ปัญหาผลไปลงผิดแถวเมื่อมีหลายแจ้งเตือนเข้าพร้อมกัน) ; เส้นทางแจ้งเตือนใหม่พฤติกรรมเดิม
+[แก้] data/NotificationLog.kt (เพิ่ม key), data/AppState.kt (findLog, updateLogResult)
+[แก้] MainActivity.kt (runManualScan, showScanStatus), res/layout/activity_main.xml (ปุ่ม + ข้อความสรุป)
+
+ยังไม่ได้ compile/ทดสอบบนเครื่อง (ผู้ใช้สั่งไม่ต้องทดสอบ) — จุดเสี่ยง compile: NotificationListenerService.kt

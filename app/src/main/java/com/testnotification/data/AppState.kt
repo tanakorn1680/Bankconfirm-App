@@ -30,6 +30,15 @@ object AppState {
         if (logs.isNotEmpty()) logs[0] = logs[0].copy(matchResult = matchResult)
     }
 
+    /** อัปเดตผลจับคู่ของแจ้งเตือนตาม key (แม่นกว่า updateLastLog เมื่อมีหลายอันเข้าพร้อมกัน) */
+    @Synchronized fun updateLogResult(key: String, matchResult: String) {
+        val i = logs.indexOfFirst { it.key == key }
+        if (i >= 0) logs[i] = logs[i].copy(matchResult = matchResult)
+    }
+
+    @Synchronized fun findLog(key: String): NotificationLog? =
+        if (key.isEmpty()) null else logs.firstOrNull { it.key == key }
+
     @Synchronized fun getLogs(): List<NotificationLog> = logs.toList()
 
     // ── Package filter (persistent) ──────────────────────────────────────────

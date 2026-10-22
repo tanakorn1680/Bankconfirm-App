@@ -30,6 +30,7 @@ import com.testnotification.data.PendingOrder
 import com.testnotification.databinding.ActivityMainBinding
 import com.testnotification.network.ApiClient
 import com.testnotification.service.ListenerHealth
+import com.testnotification.service.TestNotificationService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -143,6 +144,66 @@ class MainActivity : AppCompatActivity() {
         binding.btnOpenSettings.setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
+        binding.btnScanNow.setOnClickListener { runManualScan() }
+    }
+
+    // =========================================================================
+    // อ่านแจ้งเตือนที่ค้างอยู่ในแถบแจ้งเตือนตอนนี้ แล้วส่งไปจับคู่ (กดเองเมื่อแอพจับคู่ไม่ได้)
+    // =========================================================================
+
+    private val scanLabel = "อ่านแจ้งเตือนที่มีอยู่ตอนนี้"
+
+    private fun runManualScan() {
+        if (!isNotificationAccessEnabled()) {
+            showScanStatus("ยังไม่ได้อนุญาต Notification Access — กดปุ่มเปิดสิทธิ์ด้านบนก่อน", PillKind.BAD)
+            return
+        }
+        val service = TestNotificationService.instance
+        if (service == null) {
+            // listener ยังไม่เชื่อมต่อ — สั่งซ่อมให้ แล้วให้ผู้ใช้กดใหม่
+            ListenerHealth.ensureBound(applicationContext, "manual-scan")
+            showScanStatus("ตัวอ่านแจ้งเตือนยังไม่เชื่อมต่อ กำลังซ่อมให้ รอสักครู่แล้วกดอีกครั้ง", PillKind.WARN)
+            return
+        }
+
+        binding.btnScanNow.isEnabled = false
+        binding.btnScanNow.text = "กำลังอ่าน..."
+
+        uiScope.launch {
+            val r = service.scanActiveNotifications()
+            if (isFinishing || isDestroyed) return@launch
+
+            binding.btnScanNow.isEnabled = true
+            binding.btnScanNow.text = scanLabel
+            refreshLog()
+
+            val maxMin = TestNotificationService.SCAN_MAX_AGE_MS / 60_000L
+            when {
+                r.error != null ->
+                    showScanStatus("อ่านไม่สำเร็จ: ${r.error}", PillKind.BAD)
+                r.found == 0 ->
+                    showScanStatus("ไม่พบแจ้งเตือนของแอพที่เลือกไว้ในแถบแจ้งเตือนตอนนี้", PillKind.NEUTRAL)
+                else -> {
+                    val parts = mutableListOf("พบ ${r.found} แจ้งเตือน")
+                    if (r.sent > 0)        parts += "ส่งจับคู่ ${r.sent} (สำเร็จ ${r.matched})"
+                    if (r.alreadyDone > 0) parts += "จับคู่แล้ว ${r.alreadyDone}"
+                    if (r.tooOld > 0)      parts += "เก่ากว่า $maxMin นาที ${r.tooOld} (ข้าม)"
+                    if (r.noAmount > 0)    parts += "อ่านยอดไม่ได้ ${r.noAmount}"
+                    val kind = when {
+                        r.matched > 0 || (r.sent == 0 && r.alreadyDone > 0) -> PillKind.OK
+                        r.sent > 0 || r.noAmount > 0                        -> PillKind.WARN
+                        else                                                -> PillKind.NEUTRAL
+                    }
+                    showScanStatus(parts.joinToString(" · "), kind)
+                }
+            }
+        }
+    }
+
+    private fun showScanStatus(message: String, kind: PillKind) {
+        binding.tvScanStatus.text = "${timeFmt.format(Date())}  $message"
+        binding.tvScanStatus.setTextColor(ContextCompat.getColor(this, kind.colorRes()))
+        binding.tvScanStatus.visibility = View.VISIBLE
     }
 
     // =========================================================================

@@ -23,4 +23,5 @@ data class NotificationLog(
     val bigText:     String,
     val subText:     String,
     val matchResult: String? = null,  // null = ไม่ใช่ธนาคาร
+    val key:         String  = "",    // ใช้อ้างอิงอัปเดตผลจับคู่ของแจ้งเตือนนี้ (sbn.key|postTime)
 )
