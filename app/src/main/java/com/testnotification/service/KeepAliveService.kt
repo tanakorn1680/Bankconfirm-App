@@ -7,10 +7,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
-import android.os.Handler
 import android.os.IBinder
-import android.os.Looper
-import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -19,16 +16,15 @@ import com.testnotification.R
 import com.testnotification.receiver.AlarmReceiver
 
 /**
- * KeepAliveService — hardened สำหรับ MIUI/HyperOS/Samsung
+ * KeepAliveService — ตัวยึดโปรเซสแบบเบา (ไม่ถือ WakeLock ค้าง ไม่มีลูปในโปรเซส)
  *
- * แก้ปัญหา:
- * 1. WakeLock expire ก่อน watchdog renew → ใช้ timeout 65 นาที + renew ทุก 30 นาที
- * 2. onDestroy() ถูก block โดย OS → AlarmManager backup ทุก 15 นาที
- * 3. Coroutine scope ค้างหลัง service destroy → cancel ใน onDestroy()
- * 4. startService() จากเบื้องหลัง (onDestroy/onTaskRemoved) throw บน Android 8+/12+
- *    แล้วทำให้โปรเซส crash (ลาก NotificationListener ตายไปด้วย) → ครอบ try/catch
- * 5. NotificationListener หลุด bind แล้วไม่กลับมา → ListenerHealth.ensureBound()
- *    (สลับ enable/disable component) ทุกครั้งที่ watchdog/alarm/start ทำงาน
+ * หลักการ (event-driven):
+ * - งานจริงเริ่มตอนมีแจ้งเตือนของแอพที่เลือกไว้เท่านั้น (TestNotificationService
+ *   ถูกระบบปลุกเอง) และถือ WakeLock สั้นๆ เฉพาะช่วงส่ง API
+ * - service นี้ทำหน้าที่แค่ให้โปรเซสมี priority สูง (foreground) กัน OEM ฆ่า
+ *   + ตั้ง alarm one-shot ทุก 15 นาทีเพื่อตรวจ/ซ่อม listener ที่หลุด bind
+ * - startService() จากเบื้องหลังอาจ throw บน Android 8+/12+ → ครอบ try/catch
+ *   (crash = ลาก NotificationListener ตายไปด้วย)
  */
 class KeepAliveService : Service() {
 
@@ -36,13 +32,6 @@ class KeepAliveService : Service() {
         private const val TAG               = "KeepAliveService"
         private const val CHANNEL_ID        = "payment_keepalive"
         private const val NOTIF_ID          = 1001
-        private const val WAKE_TAG          = "com.testnotification:keepalive"
-
-        // watchdog renew wakelock + rebind ทุก 30 นาที
-        private const val WATCHDOG_MS       = 30 * 60 * 1000L
-
-        // wakelock timeout = 65 นาที (> WATCHDOG_MS * 2 เผื่อ Doze delay)
-        private const val WAKE_TIMEOUT_MS   = 65 * 60 * 1000L
 
         // AlarmManager backup — ทำให้ OS ปลุก service ทุก 15 นาที
         private const val ALARM_INTERVAL_MS = 15 * 60 * 1000L
@@ -88,18 +77,6 @@ class KeepAliveService : Service() {
             )
     }
 
-    private var wakeLock: PowerManager.WakeLock? = null
-    private val handler = Handler(Looper.getMainLooper())
-
-    private val watchdog = object : Runnable {
-        override fun run() {
-            Log.d(TAG, "watchdog ping")
-            renewWakeLock()
-            reconnectNotificationListener("watchdog")
-            handler.postDelayed(this, WATCHDOG_MS)
-        }
-    }
-
     // =========================================================================
     // Lifecycle
     // =========================================================================
@@ -110,15 +87,12 @@ class KeepAliveService : Service() {
         super.onCreate()
         createChannel()
         startForeground(NOTIF_ID, buildNotification())
-        acquireWakeLock()
-        scheduleAlarm(applicationContext)   // ← AlarmManager backup
-        handler.post(watchdog)
+        scheduleAlarm(applicationContext)   // ← AlarmManager backup (one-shot)
         Log.d(TAG, "created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // ถูกปลุกโดย AlarmManager หรือ BootReceiver — ตรวจสอบ wakelock
-        if (wakeLock == null || wakeLock?.isHeld == false) acquireWakeLock()
+        // ถูกปลุกโดย AlarmManager / BootReceiver / เปิดแอพ
         scheduleAlarm(applicationContext)   // alarm เป็นแบบ one-shot — ตั้งรอบถัดไปเสมอ
         reconnectNotificationListener("onStartCommand")
         return START_STICKY
@@ -133,8 +107,6 @@ class KeepAliveService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         Log.w(TAG, "destroyed — restarting")
-        handler.removeCallbacks(watchdog)
-        releaseWakeLock()
         // AlarmManager จะ restart อยู่แล้ว แต่ startService เพิ่มเผื่อ OS อนุญาต
         safeRestartSelf()
     }
@@ -148,42 +120,6 @@ class KeepAliveService : Service() {
             startService(Intent(applicationContext, KeepAliveService::class.java))
         } catch (e: Exception) {
             Log.w(TAG, "restart self not allowed: ${e.message} — รอ AlarmManager ปลุกแทน")
-        }
-    }
-
-    // =========================================================================
-    // WakeLock — timeout 65 นาที ป้องกัน Doze delay ทำ renew ไม่ทัน
-    // =========================================================================
-
-    private fun acquireWakeLock() {
-        val pm = getSystemService(PowerManager::class.java)
-        wakeLock?.let { if (it.isHeld) it.release() }
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_TAG).apply {
-            setReferenceCounted(false)
-            acquire(WAKE_TIMEOUT_MS)
-        }
-        Log.d(TAG, "wakelock acquired ${WAKE_TIMEOUT_MS / 60000} min")
-    }
-
-    private fun renewWakeLock() {
-        try {
-            wakeLock?.let {
-                if (it.isHeld) it.release()
-                it.acquire(WAKE_TIMEOUT_MS)
-                Log.d(TAG, "wakelock renewed")
-            } ?: acquireWakeLock()
-        } catch (e: Exception) {
-            Log.w(TAG, "wakelock renew error: ${e.message}")
-            acquireWakeLock()
-        }
-    }
-
-    private fun releaseWakeLock() {
-        try {
-            wakeLock?.let { if (it.isHeld) it.release() }
-            wakeLock = null
-        } catch (e: Exception) {
-            Log.w(TAG, "wakelock release error: ${e.message}")
         }
     }
 

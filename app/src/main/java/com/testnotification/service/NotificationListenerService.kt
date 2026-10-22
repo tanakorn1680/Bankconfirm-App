@@ -1,6 +1,7 @@
 package com.testnotification.service
 
 import android.content.Intent
+import android.os.PowerManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -46,6 +47,17 @@ class TestNotificationService : NotificationListenerService() {
         /** service ที่ connected อยู่ตอนนี้ (null = ยังไม่ได้ต่อ/หลุด) — ใช้กับปุ่มสแกนในหน้าหลัก */
         @Volatile var instance: TestNotificationService? = null
             private set
+
+        // WakeLock สั้นๆ เฉพาะช่วงส่ง API ของแจ้งเตือนที่ตรงแอพที่เลือก (ไม่ถือค้างตลอดเวลา)
+        // timeout > เวลารวม connect+read+write ของ ApiClient เผื่อเน็ตช้า
+        private const val WORK_WAKE_TAG        = "com.testnotification:confirm"
+        private const val WORK_WAKE_TIMEOUT_MS = 90_000L
+
+        // scope ระดับโปรเซส — ไม่ถูก cancel ตอน service destroy จึงไม่ทำให้ request ที่กำลังส่งหาย
+        private val workScope = CoroutineScope(
+            Dispatchers.IO + SupervisorJob() +
+                CoroutineExceptionHandler { _, e -> Log.e(TAG, "work error: ${e.message}", e) }
+        )
     }
 
     /** ผลของการกดปุ่มอ่านแจ้งเตือนที่ค้างอยู่ */
@@ -149,19 +161,40 @@ class TestNotificationService : NotificationListenerService() {
         AppState.updateLogResult(log.key, "${AmountParser.format(amount)} [$bankLabel] กำลังจับคู่...")
         broadcast()
 
-        serviceScope.launch {
-            val result = ApiClient.confirmPayment(
-                amount         = amount,
-                bank           = bankLabel,
-                timestampSec   = sbn.postTime / 1000L,
-                notificationId = notificationIdOf(log.packageName, sbn.postTime, amount),
-                isTest         = false,
-            )
+        // ปลุก CPU เฉพาะช่วงส่ง API แล้วปล่อยทันทีเมื่อเสร็จ (event-driven ไม่มี WakeLock ค้าง)
+        val wl = acquireWorkWakeLock()
+        workScope.launch {
+            try {
+                val result = ApiClient.confirmPayment(
+                    amount         = amount,
+                    bank           = bankLabel,
+                    timestampSec   = sbn.postTime / 1000L,
+                    notificationId = notificationIdOf(log.packageName, sbn.postTime, amount),
+                    isTest         = false,
+                )
 
-            val resultText = describe(result, amount)
-            Log.i(TAG, "match result: $resultText")
-            AppState.updateLogResult(log.key, "${AmountParser.format(amount)} [$bankLabel]: $resultText")
-            broadcast()
+                val resultText = describe(result, amount)
+                Log.i(TAG, "match result: $resultText")
+                AppState.updateLogResult(log.key, "${AmountParser.format(amount)} [$bankLabel]: $resultText")
+                broadcast()
+            } finally {
+                releaseWorkWakeLock(wl)
+            }
+        }
+    }
+
+    private fun acquireWorkWakeLock(): PowerManager.WakeLock? = try {
+        getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WORK_WAKE_TAG)
+            .apply { setReferenceCounted(false); acquire(WORK_WAKE_TIMEOUT_MS) }
+    } catch (e: Exception) {
+        Log.w(TAG, "acquire wakelock failed: ${e.message}")
+        null
+    }
+
+    private fun releaseWorkWakeLock(wl: PowerManager.WakeLock?) {
+        try { if (wl?.isHeld == true) wl.release() } catch (e: Exception) {
+            Log.w(TAG, "release wakelock failed: ${e.message}")
         }
     }
 

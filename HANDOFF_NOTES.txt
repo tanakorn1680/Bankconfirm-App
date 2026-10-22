@@ -1,6 +1,6 @@
 =====================================================================
 HANDOFF NOTES — Bankconfirm-App (Android, Kotlin)
-อัปเดตล่าสุด: 22 ต.ค. 2026 (งานที่ 2: ธีมตามแดชบอร์ด — ข้อ 9 ; งานที่ 3: ปุ่มอ่านแจ้งเตือนที่ค้างอยู่ — ข้อ 10)
+อัปเดตล่าสุด: 22 ต.ค. 2026 (งานที่ 2: ธีมตามแดชบอร์ด — ข้อ 9 ; งานที่ 3: ปุ่มอ่านแจ้งเตือนที่ค้างอยู่ — ข้อ 10 ; งานที่ 4: ลดการใช้ทรัพยากร/ทำงานตามเหตุการณ์ — ข้อ 11)
 ไฟล์นี้ไว้ให้ AI/คนที่รับช่วงต่ออ่านแล้วเข้าใจสถานการณ์ได้ทันที
 =====================================================================
 
@@ -78,8 +78,8 @@ D. ไม่ได้ขอยกเว้น Battery Optimization -> ถูก 
 
 7) ข้อสังเกตอื่น (ยังไม่ได้แก้ — นอกขอบเขตงานนี้)
 ---------------------------------------------------------------------
-- ApiClient.confirmPayment รันใน serviceScope ซึ่งถูก cancel ตอน service destroy
-  -> ถ้า service ถูกทำลายกลางคัน request ที่ค้างอยู่จะหาย (ควรใช้ scope ระดับแอพ/WorkManager retry)
+- [แก้แล้วในงานที่ 4 สำหรับแจ้งเตือนใหม่] ApiClient.confirmPayment เดิมรันใน serviceScope ซึ่งถูก cancel ตอน service destroy
+  -> ตอนนี้ใช้ workScope ระดับโปรเซส (ยังไม่มี retry เมื่อเน็ตล้ม — ผู้ใช้กดปุ่มอ่านแจ้งเตือนที่ค้างอยู่ได้)
 - README.md ล้าสมัย (ยังเขียนว่าเป็นแอพทดสอบ SHOW_ALL=true)
 - มีไฟล์ network/ApiClient.kt.bak ค้างใน repo
 
@@ -163,3 +163,36 @@ D. ไม่ได้ขอยกเว้น Battery Optimization -> ถูก 
 [แก้] MainActivity.kt (runManualScan, showScanStatus), res/layout/activity_main.xml (ปุ่ม + ข้อความสรุป)
 
 ยังไม่ได้ compile/ทดสอบบนเครื่อง (ผู้ใช้สั่งไม่ต้องทดสอบ) — จุดเสี่ยง compile: NotificationListenerService.kt
+
+11) งานที่ 4 — ให้ทำงานได้ตลอดแต่เบา / เริ่มงานตอนมีแจ้งเตือนของแอพที่เลือก (22 ต.ค. 2026)
+---------------------------------------------------------------------
+เป้าหมายจากผู้ใช้: ขอคำแนะนำให้แอพทำงานได้ตลอดเวลาโดยไม่กินทรัพยากรเกินจำเป็น หรือให้เริ่มทำงานเฉพาะตอนมี
+  แจ้งเตือนจากแอพที่ตั้งไว้ (หน้าตั้งค่า / AppState.getFilterPackages — ค่าเริ่มต้น K PLUS + TrueMoney)
+
+หลักการที่ใช้ (event-driven)
+- NotificationListenerService (TestNotificationService) คือกลไก "ตื่นตามแจ้งเตือน" อยู่แล้ว: ระบบ bind และปลุกเอง
+  ไม่ต้องมีลูป/โพลของเราเอง. ระบบ Android ไม่มี API กรองตาม package ฝั่งระบบ (ทุกแจ้งเตือนยังถูกส่งเข้ามา)
+  แต่ buildLog() เช็ก package แรกสุดแล้ว return ทิ้งทันที -> แจ้งเตือนของแอพอื่นแทบไม่มีต้นทุน
+- สิ่งที่กินแบตจริงคือ PARTIAL_WAKE_LOCK ที่ถือค้างตลอด + ลูป Handler ใน KeepAliveService -> เอาออก
+
+ไฟล์ที่แก้ (งานที่ 4)
+[แก้] service/KeepAliveService.kt
+   - ตัด WakeLock ค้าง (acquire 65 นาที/renew) และ Handler watchdog ทุก 30 นาทีออกทั้งหมด
+   - เหลือแค่: foreground (ตัวยึดโปรเซสกัน OEM ฆ่า) + alarm one-shot 15 นาที (setAndAllowWhileIdle) เรียก
+     ListenerHealth.ensureBound() ซ่อม listener ที่หลุด bind ; พฤติกรรม safeRestartSelf/try-catch เดิมคงไว้
+[แก้] service/NotificationListenerService.kt
+   - เฉพาะแจ้งเตือนที่ตรงแอพที่เลือกและ parse ยอดได้: ถือ WakeLock สั้น (timeout 90 วิ) ระหว่างส่ง API แล้วปล่อยใน finally
+   - ส่ง API ผ่าน workScope (CoroutineScope ระดับโปรเซส ใน companion) แทน serviceScope -> service ถูกทำลายกลางคัน request ไม่หาย
+   - ลอจิก parse/จับคู่/ปุ่มสแกน/ข้อความผลลัพธ์ไม่เปลี่ยน (resultKind ใน MainActivity ยังใช้ได้)
+
+สิ่งที่ "ไม่เปลี่ยน": ListenerHealth, AlarmReceiver, BootReceiver, MainActivity (poll 10 วิ/clock 1 วิ ทำงานเฉพาะตอนเปิดหน้าจอ
+  หยุดใน onPause อยู่แล้ว), Manifest, UI
+
+ข้อควรรู้/ความเสี่ยง
+- เครื่องที่ฆ่าโปรเซสแรง (Xiaomi/Oppo/Vivo/Huawei/Samsung บางรุ่น) ยังต้องให้ผู้ใช้ตั้งค่าเอง: ไม่จำกัดแบต + Autostart
+  + ล็อกแอพในหน้า Recent. ห้ามเอา foreground service ออก (ช่วยกันโปรเซสถูกฆ่า และไม่กินแบตเมื่อไม่มี WakeLock)
+- ถ้าเครื่องไหนแจ้งเตือนช้าตอนจอดับนาน (Doze) ให้ตรวจว่าเปิด "ไม่จำกัดแบตเตอรี่" แล้ว ; ไม่ควรกลับไปถือ WakeLock ค้าง
+- ยังไม่มี retry อัตโนมัติเมื่อเน็ตล้มตอนส่ง (ปุ่มอ่านแจ้งเตือนที่ค้างอยู่ช่วยได้) — ตัวเลือกถัดไป: WorkManager + backoff
+  (ต้องเพิ่ม dependency work-runtime-ktx ใน gradle/libs.versions.toml + app/build.gradle.kts)
+- ยังไม่ได้ compile/ทดสอบบนเครื่อง (ผู้ใช้สั่งไม่ต้องทดสอบ) — จุดเสี่ยง compile: KeepAliveService.kt (ลบโค้ดหลายส่วน),
+  NotificationListenerService.kt (companion workScope + acquire/releaseWorkWakeLock)
